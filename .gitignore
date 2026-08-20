@@ -1,0 +1,6 @@
+bin/
+dist/
+*.log
+*.pid
+state.json
+teleantispam.env
