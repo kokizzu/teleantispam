@@ -42,6 +42,7 @@ for the bot.
 - [x] Post-ban notification message implemented and tested.
 - [x] Structured moderation action logs collect available account evidence and
       Telegram API limitation notes.
+- [x] Local `.env.override` is git-ignored and loaded by run/deploy scripts.
 - [x] Non-root systemd service file tested on the remote host.
 - [ ] Deployed to `the remote host`.
 - [ ] Remote service verified healthy.
@@ -74,15 +75,18 @@ The bot reads configuration from environment variables.
 make test
 make build
 make remote-status
-TELEGRAM_BOT_TOKEN=... TELEANTISPAM_DRY_RUN=true make run
+TELEANTISPAM_DRY_RUN=true make run
 ```
+
+For local secrets, create `.env.override`. It is ignored by git and loaded by
+`make run`, `make deploy`, and `make install-remote-env`.
 
 ## Deployment
 
 The deployment target is a non-root service account named `teleantispam`.
 
 ```sh
-TELEGRAM_BOT_TOKEN=... make deploy
+make deploy
 ```
 
 To prepare the remote binary and systemd unit before the bot token is available:
@@ -94,7 +98,7 @@ TELEANTISPAM_INSTALL_ONLY=true make deploy
 To install only `/etc/teleantispam/teleantispam.env` later:
 
 ```sh
-TELEGRAM_BOT_TOKEN=... make install-remote-env
+make install-remote-env
 make deploy
 ```
 

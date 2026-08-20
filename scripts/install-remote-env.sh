@@ -5,6 +5,8 @@ host="${TELEANTISPAM_DEPLOY_HOST:-DEPLOY_HOST}"
 ssh_opts=(-x -o BatchMode=yes -o ConnectTimeout=15)
 scp_opts=(-o BatchMode=yes -o ConnectTimeout=15)
 
+source scripts/load-local-env.sh
+
 if [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]]; then
   echo "missing TELEGRAM_BOT_TOKEN" >&2
   exit 1

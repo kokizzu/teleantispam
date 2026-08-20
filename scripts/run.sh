@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-"${GO:-go}" run ./cmd/teleantispam
+source scripts/load-local-env.sh
+
+"${GO:-go}" run ./cmd/teleantispam "$@"

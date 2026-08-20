@@ -8,6 +8,8 @@ install_only="${TELEANTISPAM_INSTALL_ONLY:-false}"
 ssh_opts=(-x -o BatchMode=yes -o ConnectTimeout=15)
 scp_opts=(-o BatchMode=yes -o ConnectTimeout=15)
 
+source scripts/load-local-env.sh
+
 if [[ ! -x "$binary" ]]; then
   echo "missing binary: $binary" >&2
   exit 1

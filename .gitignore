@@ -4,3 +4,7 @@ dist/
 *.pid
 state.json
 teleantispam.env
+.env
+.env.local
+.env.override
+.env.*.local
