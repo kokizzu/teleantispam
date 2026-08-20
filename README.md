@@ -45,10 +45,11 @@ for the bot.
 - [x] Local `.env.override` is git-ignored and loaded by run/deploy scripts.
 - [x] Bot profile icon generated, saved in `assets/`, uploaded, and verified.
 - [x] Non-root systemd service file tested on the remote host.
-- [x] Deployed to `the remote host`.
+- [x] Deployed to the remote host.
 - [x] Remote service verified healthy.
-- [ ] Bot added as admin in `gophers_id` (waiting for a promoter-capable admin to add
-      the bot as admin because the current promotion attempt is blocked by an account restriction).
+- [ ] Hourly admin-promotion check deployed to the remote host.
+- [ ] Bot added as admin in `gophers_id` (waiting for a promoter-capable admin
+      because the current promotion attempt is blocked by an account restriction).
 - [ ] Live `gophers_id` test completed.
 
 ## Configuration
@@ -70,6 +71,8 @@ The bot reads configuration from environment variables.
 | `TELEANTISPAM_POLL_TIMEOUT` | `60` | Telegram long-poll timeout in seconds. |
 | `TELEANTISPAM_DRY_RUN` | `false` | Log actions without deleting or banning. |
 | `TELEANTISPAM_ALLOW_UNKNOWN_NO_HISTORY` | `false` | Allow auto-moderation for suspicious users without an observed recent join and without observed post history. |
+| `TELEANTISPAM_ADMIN_CHECK_CHAT` | `@gophers_id` | Chat checked by the hourly admin-promotion timer. |
+| `TELEANTISPAM_ADMIN_CHECK_STATUS_PATH` | `/var/lib/teleantispam/gophers-admin-status.json` | Status JSON written by the hourly admin-promotion timer. |
 
 ## Local Commands
 
@@ -77,6 +80,7 @@ The bot reads configuration from environment variables.
 make test
 make build
 make remote-status
+make check-admin
 TELEANTISPAM_DRY_RUN=true make run
 ```
 
@@ -86,6 +90,8 @@ For local secrets, create `.env.override`. It is ignored by git and loaded by
 ## Deployment
 
 The deployment target is a non-root service account named `teleantispam`.
+Set `TELEANTISPAM_DEPLOY_HOST` in `.env.override` or in the shell before
+running deployment commands.
 
 ```sh
 make deploy

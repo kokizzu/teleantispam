@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-host="${TELEANTISPAM_DEPLOY_HOST:-DEPLOY_HOST}"
+source scripts/load-local-env.sh
+
+host="${TELEANTISPAM_DEPLOY_HOST:-}"
+if [[ -z "$host" ]]; then
+  echo "missing TELEANTISPAM_DEPLOY_HOST" >&2
+  exit 1
+fi
+
 ssh_opts=(-x -o BatchMode=yes -o ConnectTimeout=15)
 scp_opts=(-o BatchMode=yes -o ConnectTimeout=15)
-
-source scripts/load-local-env.sh
 
 if [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]]; then
   echo "missing TELEGRAM_BOT_TOKEN" >&2

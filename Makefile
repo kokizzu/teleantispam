@@ -4,7 +4,7 @@ VERSION ?= dev
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-.PHONY: fmt test build run tidy clean deploy install-remote-env remote-status
+.PHONY: fmt test build run tidy clean check-admin deploy install-remote-env remote-status
 
 fmt:
 	GO="$(GO)" bash scripts/fmt.sh
@@ -23,6 +23,9 @@ tidy:
 
 clean:
 	bash scripts/clean.sh
+
+check-admin: build
+	BINARY="bin/$(BINARY)" TELEANTISPAM_ADMIN_CHECK_STATUS_PATH="$${TELEANTISPAM_ADMIN_CHECK_STATUS_PATH:-tmp/gophers-admin-status.json}" bash scripts/check-admin.sh
 
 deploy: build
 	bash scripts/deploy.sh

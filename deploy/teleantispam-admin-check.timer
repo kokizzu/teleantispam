@@ -1,0 +1,12 @@
+[Unit]
+Description=Run TelegramAntiSpam gophers_id admin-right check hourly
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=1h
+AccuracySec=5m
+RandomizedDelaySec=2m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
