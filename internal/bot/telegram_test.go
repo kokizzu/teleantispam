@@ -11,10 +11,11 @@ import (
 )
 
 type fakeTelegramClient struct {
-	memberStatus string
-	deleted      []int
-	banned       []int64
-	sent         []sentMessage
+	memberStatus      string
+	memberLookupError string
+	deleted           []int
+	banned            []int64
+	sent              []sentMessage
 }
 
 type sentMessage struct {
@@ -39,6 +40,7 @@ func (client *fakeTelegramClient) SendMessage(chatID int64, text string) error {
 
 func (client *fakeTelegramClient) FetchAccountEvidence(_ int64, user tgbotapi.User) AccountEvidence {
 	evidence := AccountEvidenceFromUser(user)
+	evidence.ChatMemberLookupError = client.memberLookupError
 	if client.memberStatus == "" {
 		evidence.ChatMemberStatus = "member"
 	} else {
@@ -195,6 +197,30 @@ func TestHandleMessageDoesNotModerateCreator(t *testing.T) {
 	}
 	if len(client.deleted) != 0 || len(client.banned) != 0 || len(store.ModerationActions()) != 0 {
 		t.Fatalf("creator must not be moderated; deleted=%#v banned=%#v actions=%#v", client.deleted, client.banned, store.ModerationActions())
+	}
+}
+
+func TestHandleMessageDoesNotModerateWhenMemberLookupFails(t *testing.T) {
+	store, err := OpenFileStore(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig()
+	client := &fakeTelegramClient{memberLookupError: "telegram unavailable"}
+	now := time.Unix(1000, 0)
+
+	err = HandleMessage(cfg, store, client, &tgbotapi.Message{
+		MessageID: 1,
+		Date:      int(now.Unix()),
+		Chat:      &tgbotapi.Chat{ID: -100123},
+		From:      &tgbotapi.User{ID: 79, FirstName: "Unknown"},
+		Text:      "0 bitcoin крипто 免费",
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(client.deleted) != 0 || len(client.banned) != 0 || len(store.ModerationActions()) != 0 {
+		t.Fatalf("unverified member must not be moderated; deleted=%#v banned=%#v actions=%#v", client.deleted, client.banned, store.ModerationActions())
 	}
 }
 

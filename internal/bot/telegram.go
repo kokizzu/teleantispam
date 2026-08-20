@@ -155,6 +155,17 @@ func HandleMessage(cfg Config, store *FileStore, client TelegramClient, message 
 	evidence.ObservedFirstSeenAt = history.FirstSeenAt
 	evidence.ObservedJoinedAt = history.JoinedAt
 
+	if evidence.ChatMemberLookupError != "" {
+		log.Printf(
+			"skipping unverified chat member chat=%d user=%d lookup_error=%q reason=%s",
+			chatID,
+			userID,
+			evidence.ChatMemberLookupError,
+			decision.Reason,
+		)
+		return store.RecordMessage(chatID, userID, message.MessageID, messageTime, cfg.DeleteRecentLimit)
+	}
+
 	if protectedChatMemberStatus(evidence.ChatMemberStatus) {
 		log.Printf(
 			"skipping protected chat member chat=%d user=%d status=%s reason=%s",
