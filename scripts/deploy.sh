@@ -4,6 +4,7 @@ set -euo pipefail
 host="${TELEANTISPAM_DEPLOY_HOST:-DEPLOY_HOST}"
 binary="${TELEANTISPAM_BINARY:-bin/teleantispam}"
 remote_tmp="/tmp/teleantispam.$$"
+install_only="${TELEANTISPAM_INSTALL_ONLY:-false}"
 ssh_opts=(-x -o BatchMode=yes -o ConnectTimeout=15)
 scp_opts=(-o BatchMode=yes -o ConnectTimeout=15)
 
@@ -12,7 +13,7 @@ if [[ ! -x "$binary" ]]; then
   exit 1
 fi
 
-if [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]]; then
+if [[ -z "${TELEGRAM_BOT_TOKEN:-}" && "$install_only" != "true" ]]; then
   if ! ssh "${ssh_opts[@]}" "$host" "test -s /etc/teleantispam/teleantispam.env && grep -q '^TELEGRAM_BOT_TOKEN=.' /etc/teleantispam/teleantispam.env"; then
     echo "missing TELEGRAM_BOT_TOKEN locally and no populated remote /etc/teleantispam/teleantispam.env exists" >&2
     exit 1
@@ -43,11 +44,19 @@ install -o teleantispam -g teleantispam -m 0750 -d /var/lib/teleantispam
 install -o root -g teleantispam -m 0750 -d /etc/teleantispam
 if [ -f '$remote_tmp/teleantispam.env' ]; then
   install -o root -g teleantispam -m 0640 '$remote_tmp/teleantispam.env' /etc/teleantispam/teleantispam.env
-elif [ ! -f /etc/teleantispam/teleantispam.env ]; then
+elif [ ! -f /etc/teleantispam/teleantispam.env ] && [ '$install_only' != 'true' ]; then
   echo 'missing /etc/teleantispam/teleantispam.env and TELEGRAM_BOT_TOKEN was not provided' >&2
   exit 1
 fi
 systemctl daemon-reload
+if command -v systemd-analyze >/dev/null 2>&1; then
+  systemd-analyze verify /etc/systemd/system/teleantispam.service
+fi
+if [ '$install_only' = 'true' ]; then
+  echo 'teleantispam installed in install-only mode; service not enabled or started'
+  rm -rf '$remote_tmp'
+  exit 0
+fi
 systemctl enable --now teleantispam.service
 systemctl restart teleantispam.service
 systemctl --no-pager --full status teleantispam.service

@@ -35,7 +35,7 @@ for the bot.
 - [x] Post-ban notification message implemented and tested.
 - [x] Structured moderation action logs collect available account evidence and
       Telegram API limitation notes.
-- [ ] Non-root systemd service file tested on the remote host.
+- [x] Non-root systemd service file tested on the remote host.
 - [ ] Deployed to `the remote host`.
 - [ ] Remote service verified healthy.
 - [ ] Bot added as admin in `gophers_id`.
@@ -74,6 +74,12 @@ The deployment target is a non-root service account named `teleantispam`.
 
 ```sh
 TELEGRAM_BOT_TOKEN=... make deploy
+```
+
+To prepare the remote binary and systemd unit before the bot token is available:
+
+```sh
+TELEANTISPAM_INSTALL_ONLY=true make deploy
 ```
 
 The deploy script installs:
