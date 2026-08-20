@@ -47,7 +47,8 @@ for the bot.
 - [x] Non-root systemd service file tested on the remote host.
 - [x] Deployed to `the remote host`.
 - [x] Remote service verified healthy.
-- [ ] Bot added as admin in `gophers_id`.
+- [ ] Bot added as admin in `gophers_id` (waiting for a promoter-capable admin to add
+      the bot as admin because the current promotion attempt is blocked by an account restriction).
 - [ ] Live `gophers_id` test completed.
 
 ## Configuration
