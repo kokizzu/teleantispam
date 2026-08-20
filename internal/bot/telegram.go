@@ -155,6 +155,17 @@ func HandleMessage(cfg Config, store *FileStore, client TelegramClient, message 
 	evidence.ObservedFirstSeenAt = history.FirstSeenAt
 	evidence.ObservedJoinedAt = history.JoinedAt
 
+	if protectedChatMemberStatus(evidence.ChatMemberStatus) {
+		log.Printf(
+			"skipping protected chat member chat=%d user=%d status=%s reason=%s",
+			chatID,
+			userID,
+			evidence.ChatMemberStatus,
+			decision.Reason,
+		)
+		return store.RecordMessage(chatID, userID, message.MessageID, messageTime, cfg.DeleteRecentLimit)
+	}
+
 	action := ModerationAction{
 		At:                         now,
 		ChatID:                     chatID,
@@ -310,6 +321,15 @@ func BanNotice(user tgbotapi.User, reason string, deletedCount int) string {
 		username = "@" + user.UserName
 	}
 	return fmt.Sprintf("%d / %s / %s is banned because %s, %d messages deleted", user.ID, fullName(user), username, reason, deletedCount)
+}
+
+func protectedChatMemberStatus(status string) bool {
+	switch status {
+	case "creator", "administrator":
+		return true
+	default:
+		return false
+	}
 }
 
 func fullName(user tgbotapi.User) string {

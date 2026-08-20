@@ -4,24 +4,38 @@ set -euo pipefail
 host="${TELEANTISPAM_DEPLOY_HOST:-DEPLOY_HOST}"
 binary="${TELEANTISPAM_BINARY:-bin/teleantispam}"
 remote_tmp="/tmp/teleantispam.$$"
+ssh_opts=(-x -o BatchMode=yes -o ConnectTimeout=15)
+scp_opts=(-o BatchMode=yes -o ConnectTimeout=15)
 
 if [[ ! -x "$binary" ]]; then
   echo "missing binary: $binary" >&2
   exit 1
 fi
 
-ssh "$host" "mkdir -p '$remote_tmp'"
-scp "$binary" "$host:$remote_tmp/teleantispam"
-scp deploy/teleantispam.service "$host:$remote_tmp/teleantispam.service"
+if [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]]; then
+  if ! ssh "${ssh_opts[@]}" "$host" "test -s /etc/teleantispam/teleantispam.env && grep -q '^TELEGRAM_BOT_TOKEN=.' /etc/teleantispam/teleantispam.env"; then
+    echo "missing TELEGRAM_BOT_TOKEN locally and no populated remote /etc/teleantispam/teleantispam.env exists" >&2
+    exit 1
+  fi
+fi
+
+ssh "${ssh_opts[@]}" "$host" "mkdir -p '$remote_tmp'"
+scp "${scp_opts[@]}" "$binary" "$host:$remote_tmp/teleantispam"
+scp "${scp_opts[@]}" deploy/teleantispam.service "$host:$remote_tmp/teleantispam.service"
 
 if [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]]; then
   tmp_env="$(mktemp)"
   trap 'rm -f "$tmp_env"' EXIT
-  sed "s|^TELEGRAM_BOT_TOKEN=.*|TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}|" deploy/teleantispam.env.example > "$tmp_env"
-  scp "$tmp_env" "$host:$remote_tmp/teleantispam.env"
+  while IFS= read -r line; do
+    case "$line" in
+      TELEGRAM_BOT_TOKEN=*) printf 'TELEGRAM_BOT_TOKEN=%s\n' "$TELEGRAM_BOT_TOKEN" ;;
+      *) printf '%s\n' "$line" ;;
+    esac
+  done < deploy/teleantispam.env.example > "$tmp_env"
+  scp "${scp_opts[@]}" "$tmp_env" "$host:$remote_tmp/teleantispam.env"
 fi
 
-ssh "$host" "set -euo pipefail
+ssh "${ssh_opts[@]}" "$host" "set -euo pipefail
 id -u teleantispam >/dev/null 2>&1 || useradd --system --home-dir /var/lib/teleantispam --shell /usr/sbin/nologin teleantispam
 install -o root -g root -m 0755 '$remote_tmp/teleantispam' /usr/local/bin/teleantispam
 install -o root -g root -m 0644 '$remote_tmp/teleantispam.service' /etc/systemd/system/teleantispam.service

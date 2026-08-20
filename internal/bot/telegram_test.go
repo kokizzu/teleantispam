@@ -11,9 +11,10 @@ import (
 )
 
 type fakeTelegramClient struct {
-	deleted []int
-	banned  []int64
-	sent    []sentMessage
+	memberStatus string
+	deleted      []int
+	banned       []int64
+	sent         []sentMessage
 }
 
 type sentMessage struct {
@@ -38,7 +39,11 @@ func (client *fakeTelegramClient) SendMessage(chatID int64, text string) error {
 
 func (client *fakeTelegramClient) FetchAccountEvidence(_ int64, user tgbotapi.User) AccountEvidence {
 	evidence := AccountEvidenceFromUser(user)
-	evidence.ChatMemberStatus = "member"
+	if client.memberStatus == "" {
+		evidence.ChatMemberStatus = "member"
+	} else {
+		evidence.ChatMemberStatus = client.memberStatus
+	}
 	return evidence
 }
 
@@ -142,6 +147,69 @@ func TestHandleMessageDoesNotModerateObservedTenPostUser(t *testing.T) {
 	}
 	if len(client.deleted) != 0 || len(client.banned) != 0 || len(store.ModerationActions()) != 0 {
 		t.Fatalf(">=10 observed posts must not be moderated; deleted=%#v banned=%#v actions=%#v", client.deleted, client.banned, store.ModerationActions())
+	}
+}
+
+func TestHandleMessageDoesNotModerateAdministrator(t *testing.T) {
+	store, err := OpenFileStore(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig()
+	client := &fakeTelegramClient{memberStatus: "administrator"}
+	now := time.Unix(1000, 0)
+
+	err = HandleMessage(cfg, store, client, &tgbotapi.Message{
+		MessageID: 1,
+		Date:      int(now.Unix()),
+		Chat:      &tgbotapi.Chat{ID: -100123},
+		From:      &tgbotapi.User{ID: 77, FirstName: "Admin"},
+		Text:      "0 bitcoin крипто 免费",
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(client.deleted) != 0 || len(client.banned) != 0 || len(store.ModerationActions()) != 0 {
+		t.Fatalf("administrator must not be moderated; deleted=%#v banned=%#v actions=%#v", client.deleted, client.banned, store.ModerationActions())
+	}
+}
+
+func TestHandleMessageDoesNotModerateCreator(t *testing.T) {
+	store, err := OpenFileStore(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig()
+	client := &fakeTelegramClient{memberStatus: "creator"}
+	now := time.Unix(1000, 0)
+
+	err = HandleMessage(cfg, store, client, &tgbotapi.Message{
+		MessageID: 1,
+		Date:      int(now.Unix()),
+		Chat:      &tgbotapi.Chat{ID: -100123},
+		From:      &tgbotapi.User{ID: 78, FirstName: "Creator"},
+		Text:      "0 bitcoin крипто 免费",
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(client.deleted) != 0 || len(client.banned) != 0 || len(store.ModerationActions()) != 0 {
+		t.Fatalf("creator must not be moderated; deleted=%#v banned=%#v actions=%#v", client.deleted, client.banned, store.ModerationActions())
+	}
+}
+
+func TestProtectedChatMemberStatus(t *testing.T) {
+	protected := []string{"creator", "administrator"}
+	for _, status := range protected {
+		if !protectedChatMemberStatus(status) {
+			t.Fatalf("expected %q to be protected", status)
+		}
+	}
+	unprotected := []string{"member", "restricted", "left", "kicked", ""}
+	for _, status := range unprotected {
+		if protectedChatMemberStatus(status) {
+			t.Fatalf("expected %q to be unprotected", status)
+		}
 	}
 }
 

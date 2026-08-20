@@ -31,6 +31,7 @@ for the bot.
 - [x] Telegram transport builds.
 - [x] Recent-message deletion plus ban/revoke moderation path implemented and
       tested with a fake Telegram client.
+- [x] Administrator and creator safety guard tested.
 - [x] Post-ban notification message implemented and tested.
 - [x] Structured moderation action logs collect available account evidence and
       Telegram API limitation notes.
