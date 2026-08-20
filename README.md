@@ -65,6 +65,7 @@ The bot reads configuration from environment variables.
 ```sh
 make test
 make build
+make remote-status
 TELEGRAM_BOT_TOKEN=... TELEANTISPAM_DRY_RUN=true make run
 ```
 

@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -17,6 +19,13 @@ var (
 )
 
 func main() {
+	showVersion := flag.Bool("version", false, "print version and exit")
+	flag.Parse()
+	if *showVersion {
+		fmt.Printf("TelegramAntiSpam version=%s commit=%s\n", version, commit)
+		return
+	}
+
 	cfg, err := bot.LoadConfigFromEnv()
 	if err != nil {
 		log.Fatalf("load config: %v", err)
