@@ -43,6 +43,7 @@ for the bot.
 - [x] Structured moderation action logs collect available account evidence and
       Telegram API limitation notes.
 - [x] Local `.env.override` is git-ignored and loaded by run/deploy scripts.
+- [x] Bot profile icon generated, saved in `assets/`, uploaded, and verified.
 - [x] Non-root systemd service file tested on the remote host.
 - [x] Deployed to `the remote host`.
 - [x] Remote service verified healthy.
