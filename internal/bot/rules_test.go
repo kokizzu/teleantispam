@@ -77,6 +77,7 @@ func TestEvaluateMessageModeratesLowHistoryCyrillicText(t *testing.T) {
 	now := time.Unix(1000, 0)
 	decision := EvaluateMessage(testConfig(), HistoryView{
 		MessageCount: 2,
+		JoinedAt:     now.Add(-time.Hour),
 	}, MessageEvent{
 		MessageID: 9,
 		Text:      "быстрый заработок",
@@ -93,6 +94,7 @@ func TestEvaluateMessageModeratesCryptoTextFromNoHistoryUser(t *testing.T) {
 	now := time.Unix(1000, 0)
 	decision := EvaluateMessage(testConfig(), HistoryView{
 		MessageCount: 0,
+		JoinedAt:     now.Add(-time.Hour),
 	}, MessageEvent{
 		MessageID: 10,
 		Text:      "join crypto airdrop wallet now",
@@ -102,6 +104,40 @@ func TestEvaluateMessageModeratesCryptoTextFromNoHistoryUser(t *testing.T) {
 
 	if !decision.Moderate || decision.Reason != "crypto-keyword" {
 		t.Fatalf("expected crypto-keyword moderation, got %#v", decision)
+	}
+}
+
+func TestEvaluateMessageAllowsUnknownNoHistoryUserByDefault(t *testing.T) {
+	now := time.Unix(1000, 0)
+	decision := EvaluateMessage(testConfig(), HistoryView{
+		MessageCount: 0,
+	}, MessageEvent{
+		MessageID: 10,
+		Text:      "join crypto airdrop wallet now",
+		At:        now,
+		Now:       now,
+	})
+
+	if decision.Moderate {
+		t.Fatalf("expected unknown no-history user without observed join to be allowed by default, got %#v", decision)
+	}
+}
+
+func TestEvaluateMessageCanModerateUnknownNoHistoryUserWhenEnabled(t *testing.T) {
+	now := time.Unix(1000, 0)
+	cfg := testConfig()
+	cfg.AllowUnknownNoHistory = true
+	decision := EvaluateMessage(cfg, HistoryView{
+		MessageCount: 0,
+	}, MessageEvent{
+		MessageID: 10,
+		Text:      "join crypto airdrop wallet now",
+		At:        now,
+		Now:       now,
+	})
+
+	if !decision.Moderate || decision.Reason != "crypto-keyword" {
+		t.Fatalf("expected opt-in unknown no-history moderation, got %#v", decision)
 	}
 }
 
@@ -147,6 +183,7 @@ func TestEvaluateMessageUsesDeleteLimit(t *testing.T) {
 		DeleteRecentLimit: 3,
 	}, HistoryView{
 		MessageCount:     1,
+		JoinedAt:         now.Add(-time.Hour),
 		RecentMessageIDs: []int{1, 2, 3, 4},
 	}, MessageEvent{
 		MessageID: 5,

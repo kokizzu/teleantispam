@@ -25,6 +25,7 @@ func TestLoadConfigFromEnvParsesModerationSettings(t *testing.T) {
 	t.Setenv("TELEANTISPAM_ACTION_LOG_LIMIT", "99")
 	t.Setenv("TELEANTISPAM_POLL_TIMEOUT", "33")
 	t.Setenv("TELEANTISPAM_DRY_RUN", "true")
+	t.Setenv("TELEANTISPAM_ALLOW_UNKNOWN_NO_HISTORY", "true")
 
 	cfg, err := LoadConfigFromEnv()
 	if err != nil {
@@ -51,6 +52,9 @@ func TestLoadConfigFromEnvParsesModerationSettings(t *testing.T) {
 	}
 	if !cfg.DryRun {
 		t.Fatalf("expected dry run true")
+	}
+	if !cfg.AllowUnknownNoHistory {
+		t.Fatalf("expected unknown no-history moderation opt-in true")
 	}
 }
 

@@ -5,6 +5,11 @@ groups. It is intentionally conservative: users with 10 or more observed posts
 are never auto-banned or auto-deleted by the rule engine, even when a message
 looks suspicious.
 
+By default, auto-ban requires that the bot observed the user joining recently.
+This avoids treating an old group member as "new" only because the bot was just
+started with an empty state file. The looser no-history path can be enabled with
+`TELEANTISPAM_ALLOW_UNKNOWN_NO_HISTORY=true` after accepting that tradeoff.
+
 The intended moderation action mirrors the manual Telegram flow:
 
 - Delete the spammer's recent tracked messages.
@@ -33,6 +38,7 @@ for the bot.
       tested with a fake Telegram client.
 - [x] Administrator and creator safety guard tested.
 - [x] Failed Telegram member lookup is fail-closed and tested.
+- [x] Unknown no-history users are not moderated by default; opt-in path tested.
 - [x] Post-ban notification message implemented and tested.
 - [x] Structured moderation action logs collect available account evidence and
       Telegram API limitation notes.
@@ -60,6 +66,7 @@ The bot reads configuration from environment variables.
 | `TELEANTISPAM_ACTION_LOG_LIMIT` | `10000` | Maximum stored structured moderation action logs. |
 | `TELEANTISPAM_POLL_TIMEOUT` | `60` | Telegram long-poll timeout in seconds. |
 | `TELEANTISPAM_DRY_RUN` | `false` | Log actions without deleting or banning. |
+| `TELEANTISPAM_ALLOW_UNKNOWN_NO_HISTORY` | `false` | Allow auto-moderation for suspicious users without an observed recent join and without observed post history. |
 
 ## Local Commands
 

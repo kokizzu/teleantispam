@@ -20,32 +20,34 @@ const (
 )
 
 type Config struct {
-	Token             string
-	StatePath         string
-	AllowedChatIDs    map[int64]bool
-	ReportChatID      int64
-	MaxSafePosts      int
-	LowHistoryPosts   int
-	JoinWindow        time.Duration
-	MaxMessageAge     time.Duration
-	DeleteRecentLimit int
-	ActionLogLimit    int
-	PollTimeout       int
-	DryRun            bool
+	Token                 string
+	StatePath             string
+	AllowedChatIDs        map[int64]bool
+	ReportChatID          int64
+	MaxSafePosts          int
+	LowHistoryPosts       int
+	JoinWindow            time.Duration
+	MaxMessageAge         time.Duration
+	DeleteRecentLimit     int
+	ActionLogLimit        int
+	PollTimeout           int
+	DryRun                bool
+	AllowUnknownNoHistory bool
 }
 
 func LoadConfigFromEnv() (Config, error) {
 	cfg := Config{
-		Token:             strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")),
-		StatePath:         getEnvDefault("TELEANTISPAM_STATE_PATH", defaultStatePath),
-		MaxSafePosts:      getEnvIntDefault("TELEANTISPAM_MAX_SAFE_POSTS", defaultMaxSafePosts),
-		LowHistoryPosts:   getEnvIntDefault("TELEANTISPAM_LOW_HISTORY_POSTS", defaultLowHistoryPosts),
-		JoinWindow:        getEnvDurationDefault("TELEANTISPAM_JOIN_WINDOW", defaultJoinWindow),
-		MaxMessageAge:     getEnvDurationDefault("TELEANTISPAM_MAX_MESSAGE_AGE", defaultMaxMessageAge),
-		DeleteRecentLimit: getEnvIntDefault("TELEANTISPAM_DELETE_RECENT_LIMIT", defaultDeleteRecentLimit),
-		ActionLogLimit:    getEnvIntDefault("TELEANTISPAM_ACTION_LOG_LIMIT", defaultActionLogLimit),
-		PollTimeout:       getEnvIntDefault("TELEANTISPAM_POLL_TIMEOUT", defaultPollTimeout),
-		DryRun:            getEnvBoolDefault("TELEANTISPAM_DRY_RUN", false),
+		Token:                 strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")),
+		StatePath:             getEnvDefault("TELEANTISPAM_STATE_PATH", defaultStatePath),
+		MaxSafePosts:          getEnvIntDefault("TELEANTISPAM_MAX_SAFE_POSTS", defaultMaxSafePosts),
+		LowHistoryPosts:       getEnvIntDefault("TELEANTISPAM_LOW_HISTORY_POSTS", defaultLowHistoryPosts),
+		JoinWindow:            getEnvDurationDefault("TELEANTISPAM_JOIN_WINDOW", defaultJoinWindow),
+		MaxMessageAge:         getEnvDurationDefault("TELEANTISPAM_MAX_MESSAGE_AGE", defaultMaxMessageAge),
+		DeleteRecentLimit:     getEnvIntDefault("TELEANTISPAM_DELETE_RECENT_LIMIT", defaultDeleteRecentLimit),
+		ActionLogLimit:        getEnvIntDefault("TELEANTISPAM_ACTION_LOG_LIMIT", defaultActionLogLimit),
+		PollTimeout:           getEnvIntDefault("TELEANTISPAM_POLL_TIMEOUT", defaultPollTimeout),
+		DryRun:                getEnvBoolDefault("TELEANTISPAM_DRY_RUN", false),
+		AllowUnknownNoHistory: getEnvBoolDefault("TELEANTISPAM_ALLOW_UNKNOWN_NO_HISTORY", false),
 	}
 
 	if cfg.Token == "" {

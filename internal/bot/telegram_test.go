@@ -57,6 +57,9 @@ func TestHandleMessageDeletesRecentMessagesBansLogsAndNotifies(t *testing.T) {
 	cfg := testConfig()
 	client := &fakeTelegramClient{}
 	now := time.Unix(1000, 0)
+	if err := store.MarkJoin(-100123, 55, now.Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
 
 	for _, id := range []int{100, 101} {
 		err := HandleMessage(cfg, store, client, &tgbotapi.Message{
@@ -265,6 +268,17 @@ func TestHandleUpdatesProcessesRecentPendingAndSkipsOld(t *testing.T) {
 				MessageID: 2,
 				Date:      int(now.Add(-time.Hour).Unix()),
 				Chat:      &tgbotapi.Chat{ID: -100123},
+				NewChatMembers: []tgbotapi.User{
+					{ID: 89, FirstName: "NewPending"},
+				},
+			},
+		},
+		{
+			UpdateID: 22,
+			Message: &tgbotapi.Message{
+				MessageID: 3,
+				Date:      int(now.Add(-time.Hour).Unix()),
+				Chat:      &tgbotapi.Chat{ID: -100123},
 				From:      &tgbotapi.User{ID: 89, FirstName: "NewPending"},
 				Text:      "0",
 			},
@@ -273,7 +287,7 @@ func TestHandleUpdatesProcessesRecentPendingAndSkipsOld(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if nextOffset != 22 {
+	if nextOffset != 23 {
 		t.Fatalf("unexpected next offset: %d", nextOffset)
 	}
 	if !reflect.DeepEqual(client.banned, []int64{89}) {
@@ -289,6 +303,9 @@ func TestHandleMessageDryRunLogsButDoesNotDeleteOrBanOrNotify(t *testing.T) {
 	cfg := testConfig()
 	cfg.DryRun = true
 	client := &fakeTelegramClient{}
+	if err := store.MarkJoin(-100123, 99, time.Unix(990, 0)); err != nil {
+		t.Fatal(err)
+	}
 
 	err = HandleMessage(cfg, store, client, &tgbotapi.Message{
 		MessageID: 1,

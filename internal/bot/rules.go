@@ -66,10 +66,10 @@ func tooOldForModeration(cfg Config, event MessageEvent) bool {
 }
 
 func eligibleLowHistory(cfg Config, history HistoryView, now time.Time) bool {
-	if history.MessageCount <= cfg.LowHistoryPosts {
+	if !history.JoinedAt.IsZero() && !now.Before(history.JoinedAt) && now.Sub(history.JoinedAt) <= cfg.JoinWindow {
 		return true
 	}
-	if !history.JoinedAt.IsZero() && !now.Before(history.JoinedAt) && now.Sub(history.JoinedAt) <= cfg.JoinWindow {
+	if cfg.AllowUnknownNoHistory && history.MessageCount <= cfg.LowHistoryPosts {
 		return true
 	}
 	return false
