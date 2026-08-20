@@ -44,8 +44,8 @@ for the bot.
       Telegram API limitation notes.
 - [x] Local `.env.override` is git-ignored and loaded by run/deploy scripts.
 - [x] Non-root systemd service file tested on the remote host.
-- [ ] Deployed to `the remote host`.
-- [ ] Remote service verified healthy.
+- [x] Deployed to `the remote host`.
+- [x] Remote service verified healthy.
 - [ ] Bot added as admin in `gophers_id`.
 - [ ] Live `gophers_id` test completed.
 
