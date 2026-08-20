@@ -92,3 +92,30 @@ func TestWriteAdminCheckResult(t *testing.T) {
 		t.Fatalf("got %+v", got)
 	}
 }
+
+func TestShouldNotifyAdminReadyOnlyOnTransition(t *testing.T) {
+	ready := AdminCheckResult{AdminReady: true}
+	notReady := AdminCheckResult{AdminReady: false}
+
+	if !shouldNotifyAdminReady(notReady, ready) {
+		t.Fatal("expected notification on not-ready to ready transition")
+	}
+	if shouldNotifyAdminReady(ready, ready) {
+		t.Fatal("did not expect repeated notification")
+	}
+	if shouldNotifyAdminReady(AdminCheckResult{ReadyNotified: true}, ready) {
+		t.Fatal("did not expect notification after previous notification")
+	}
+}
+
+func TestAdminCheckMessageConfig(t *testing.T) {
+	named := adminCheckMessageConfig("gophers_id", "hello")
+	if named.ChannelUsername != "@gophers_id" {
+		t.Fatalf("ChannelUsername = %q", named.ChannelUsername)
+	}
+
+	numeric := adminCheckMessageConfig("-1001116539442", "hello")
+	if numeric.ChatID != -1001116539442 {
+		t.Fatalf("ChatID = %d", numeric.ChatID)
+	}
+}

@@ -25,6 +25,7 @@ func main() {
 	checkAdmin := flag.Bool("check-admin", false, "check whether the bot has required admin rights and exit")
 	checkAdminChat := flag.String("check-admin-chat", envDefault("TELEANTISPAM_ADMIN_CHECK_CHAT", bot.DefaultAdminCheckChat), "chat username or ID for admin-right checks")
 	checkAdminStatusPath := flag.String("check-admin-status-path", envDefault("TELEANTISPAM_ADMIN_CHECK_STATUS_PATH", bot.DefaultAdminCheckStatusPath), "path to write the admin-right check status JSON")
+	checkAdminNotifyChat := flag.String("check-admin-notify-chat", envDefault("TELEANTISPAM_ADMIN_CHECK_NOTIFY_CHAT", ""), "chat username or ID to notify once when admin rights are ready")
 	flag.Parse()
 	if *showVersion {
 		fmt.Printf("TelegramAntiSpam version=%s commit=%s\n", version, commit)
@@ -35,7 +36,7 @@ func main() {
 		if token == "" {
 			log.Fatal("TELEGRAM_BOT_TOKEN is required")
 		}
-		result, err := bot.RunAdminCheck(token, *checkAdminChat, *checkAdminStatusPath, time.Now())
+		result, err := bot.RunAdminCheck(token, *checkAdminChat, *checkAdminStatusPath, *checkAdminNotifyChat, time.Now())
 		log.Print(result.Summary())
 		if err != nil {
 			log.Fatalf("check admin: %v", err)

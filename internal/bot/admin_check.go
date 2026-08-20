@@ -29,14 +29,19 @@ type AdminCheckResult struct {
 	CanPromoteMembers  bool      `json:"can_promote_members"`
 	AdminReady         bool      `json:"admin_ready"`
 	MissingRights      []string  `json:"missing_rights,omitempty"`
+	ReadyNotified      bool      `json:"ready_notified"`
+	ReadyNotifyChat    string    `json:"ready_notify_chat,omitempty"`
+	ReadyNotifyError   string    `json:"ready_notify_error,omitempty"`
 	Error              string    `json:"error,omitempty"`
 }
 
-func RunAdminCheck(token string, chat string, statusPath string, now time.Time) (AdminCheckResult, error) {
+func RunAdminCheck(token string, chat string, statusPath string, notifyChat string, now time.Time) (AdminCheckResult, error) {
 	result := AdminCheckResult{
 		CheckedAt: now.UTC(),
 		Chat:      chat,
 	}
+	previous, _ := ReadAdminCheckResult(statusPath)
+
 	api, err := tgbotapi.NewBotAPI(strings.TrimSpace(token))
 	if err != nil {
 		result.Error = err.Error()
@@ -57,6 +62,17 @@ func RunAdminCheck(token string, chat string, statusPath string, now time.Time) 
 	}
 
 	result = EvaluateAdminCheckResult(chat, api.Self, member, now)
+	if shouldNotifyAdminReady(previous, result) {
+		result.ReadyNotifyChat = adminCheckNotifyChat(notifyChat, chat)
+		if err := sendAdminReadyNotification(api, result.ReadyNotifyChat, result); err != nil {
+			result.ReadyNotifyError = err.Error()
+		} else {
+			result.ReadyNotified = true
+		}
+	} else if previous.ReadyNotified {
+		result.ReadyNotified = true
+		result.ReadyNotifyChat = previous.ReadyNotifyChat
+	}
 	if err := WriteAdminCheckResult(statusPath, result); err != nil {
 		return result, err
 	}
@@ -136,6 +152,58 @@ func WriteAdminCheckResult(path string, result AdminCheckResult) error {
 		return err
 	}
 	return os.Rename(tmpName, path)
+}
+
+func ReadAdminCheckResult(path string) (AdminCheckResult, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return AdminCheckResult{}, os.ErrNotExist
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return AdminCheckResult{}, err
+	}
+	var result AdminCheckResult
+	if err := json.Unmarshal(data, &result); err != nil {
+		return AdminCheckResult{}, err
+	}
+	return result, nil
+}
+
+func shouldNotifyAdminReady(previous AdminCheckResult, current AdminCheckResult) bool {
+	return current.AdminReady && !previous.AdminReady && !previous.ReadyNotified && current.Error == ""
+}
+
+func sendAdminReadyNotification(api *tgbotapi.BotAPI, chat string, result AdminCheckResult) error {
+	_, err := api.Send(adminCheckMessageConfig(chat, adminReadyNotificationText(result)))
+	return err
+}
+
+func adminReadyNotificationText(result AdminCheckResult) string {
+	username := "-"
+	if result.BotUsername != "" {
+		username = "@" + result.BotUsername
+	}
+	return fmt.Sprintf("%s is admin-ready in %s: delete messages and ban/restrict users rights are present. Live test can be run.", username, result.Chat)
+}
+
+func adminCheckNotifyChat(notifyChat string, checkChat string) string {
+	notifyChat = strings.TrimSpace(notifyChat)
+	if notifyChat != "" {
+		return notifyChat
+	}
+	return strings.TrimSpace(checkChat)
+}
+
+func adminCheckMessageConfig(chat string, text string) tgbotapi.MessageConfig {
+	chat = strings.TrimSpace(chat)
+	if chatID, err := strconv.ParseInt(chat, 10, 64); err == nil {
+		return tgbotapi.NewMessage(chatID, text)
+	}
+	if !strings.HasPrefix(chat, "@") {
+		chat = "@" + chat
+	}
+	return tgbotapi.NewMessageToChannel(chat, text)
 }
 
 func missingAdminRights(member tgbotapi.ChatMember) []string {

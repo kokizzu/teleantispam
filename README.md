@@ -73,6 +73,7 @@ The bot reads configuration from environment variables.
 | `TELEANTISPAM_ALLOW_UNKNOWN_NO_HISTORY` | `false` | Allow auto-moderation for suspicious users without an observed recent join and without observed post history. |
 | `TELEANTISPAM_ADMIN_CHECK_CHAT` | `@gophers_id` | Chat checked by the hourly admin-promotion timer. |
 | `TELEANTISPAM_ADMIN_CHECK_STATUS_PATH` | `/var/lib/teleantispam/gophers-admin-status.json` | Status JSON written by the hourly admin-promotion timer. |
+| `TELEANTISPAM_ADMIN_CHECK_NOTIFY_CHAT` | empty | Optional chat username or ID notified once when the bot first has the required admin rights. Empty means the checked chat. |
 
 ## Local Commands
 
