@@ -83,6 +83,13 @@ To prepare the remote binary and systemd unit before the bot token is available:
 TELEANTISPAM_INSTALL_ONLY=true make deploy
 ```
 
+To install only `/etc/teleantispam/teleantispam.env` later:
+
+```sh
+TELEGRAM_BOT_TOKEN=... make install-remote-env
+make deploy
+```
+
 The deploy script installs:
 
 - `/usr/local/bin/teleantispam`

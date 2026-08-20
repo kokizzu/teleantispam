@@ -27,12 +27,7 @@ scp "${scp_opts[@]}" deploy/teleantispam.service "$host:$remote_tmp/teleantispam
 if [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]]; then
   tmp_env="$(mktemp)"
   trap 'rm -f "$tmp_env"' EXIT
-  while IFS= read -r line; do
-    case "$line" in
-      TELEGRAM_BOT_TOKEN=*) printf 'TELEGRAM_BOT_TOKEN=%s\n' "$TELEGRAM_BOT_TOKEN" ;;
-      *) printf '%s\n' "$line" ;;
-    esac
-  done < deploy/teleantispam.env.example > "$tmp_env"
+  TELEANTISPAM_ENV_OUTPUT="$tmp_env" bash scripts/render-env.sh
   scp "${scp_opts[@]}" "$tmp_env" "$host:$remote_tmp/teleantispam.env"
 fi
 

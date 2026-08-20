@@ -4,7 +4,7 @@ VERSION ?= dev
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-.PHONY: fmt test build run tidy clean deploy remote-status
+.PHONY: fmt test build run tidy clean deploy install-remote-env remote-status
 
 fmt:
 	GO="$(GO)" bash scripts/fmt.sh
@@ -26,6 +26,9 @@ clean:
 
 deploy: build
 	bash scripts/deploy.sh
+
+install-remote-env:
+	bash scripts/install-remote-env.sh
 
 remote-status:
 	bash scripts/remote-status.sh
