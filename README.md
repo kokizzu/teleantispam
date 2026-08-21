@@ -44,7 +44,8 @@ for the bot.
       tested with a fake Telegram client.
 - [x] Administrator and creator safety guard tested.
 - [x] Failed Telegram member lookup is fail-closed and tested.
-- [x] Unknown no-history users are not moderated by default; opt-in path tested.
+- [x] Plain unknown no-history users are not moderated by default; broad opt-in
+      path tested.
 - [x] High-confidence unknown no-history crypto and Cyrillic recruitment spam
       moderation tested.
 - [x] Post-ban notification message implemented and tested.
