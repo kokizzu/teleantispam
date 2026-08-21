@@ -4,17 +4,20 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 const DefaultRetryFailedActionMaxAge = 48 * time.Hour
 
 type RetryFailedModerationSummary struct {
-	Candidates int
-	Attempted  int
-	Deleted    int
-	Banned     int
-	Failed     int
-	Skipped    int
+	Candidates    int
+	Attempted     int
+	Deleted       int
+	Banned        int
+	AlreadyBanned int
+	Failed        int
+	Skipped       int
 }
 
 func RetryFailedModerationActions(cfg Config, store *FileStore, client TelegramClient, now time.Time, maxAge time.Duration) (RetryFailedModerationSummary, error) {
@@ -54,6 +57,18 @@ func RetryFailedModerationActions(cfg Config, store *FileStore, client TelegramC
 		retry.DeletedCount = 0
 		retry.Banned = false
 
+		evidence := client.FetchAccountEvidence(action.ChatID, tgbotapi.User{ID: action.UserID})
+		if evidence.ChatMemberLookupError == "" && evidence.ChatMemberStatus == "kicked" {
+			retry.User = mergeRetryEvidence(retry.User, evidence)
+			retry.Banned = true
+			summary.Attempted++
+			summary.AlreadyBanned++
+			if err := store.AppendModerationAction(retry, cfg.ActionLogLimit); err != nil {
+				return summary, err
+			}
+			continue
+		}
+
 		for _, messageID := range uniqueRetryMessageIDs(action) {
 			if err := client.DeleteMessage(action.ChatID, messageID); err != nil {
 				retry.Errors = append(retry.Errors, fmt.Sprintf("retry delete message %d: %v", messageID, err))
@@ -87,14 +102,31 @@ func RetryFailedModerationActions(cfg Config, store *FileStore, client TelegramC
 
 func (summary RetryFailedModerationSummary) Summary() string {
 	return fmt.Sprintf(
-		"retry_failed_moderation candidates=%d attempted=%d banned=%d deleted=%d failed=%d skipped=%d",
+		"retry_failed_moderation candidates=%d attempted=%d banned=%d already_banned=%d deleted=%d failed=%d skipped=%d",
 		summary.Candidates,
 		summary.Attempted,
 		summary.Banned,
+		summary.AlreadyBanned,
 		summary.Deleted,
 		summary.Failed,
 		summary.Skipped,
 	)
+}
+
+func mergeRetryEvidence(existing AccountEvidence, latest AccountEvidence) AccountEvidence {
+	if latest.ID != 0 {
+		existing.ID = latest.ID
+	}
+	if latest.ChatMemberStatus != "" {
+		existing.ChatMemberStatus = latest.ChatMemberStatus
+	}
+	if latest.ChatMemberRawJSON != "" {
+		existing.ChatMemberRawJSON = latest.ChatMemberRawJSON
+	}
+	if latest.ChatMemberLookupError != "" {
+		existing.ChatMemberLookupError = latest.ChatMemberLookupError
+	}
+	return existing
 }
 
 func retryableModerationAction(action ModerationAction, now time.Time, maxAge time.Duration) bool {

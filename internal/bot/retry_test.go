@@ -66,6 +66,45 @@ func TestRetryFailedModerationActionsRetriesLatestFailurePerUser(t *testing.T) {
 	}
 }
 
+func TestRetryFailedModerationActionsSkipsNoticeForAlreadyBannedUser(t *testing.T) {
+	store, err := OpenFileStore(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig()
+	now := time.Unix(2000, 0)
+	if err := store.AppendModerationAction(ModerationAction{
+		At:                now.Add(-time.Hour),
+		ChatID:            -100123,
+		UserID:            55,
+		User:              AccountEvidence{ID: 55, FirstName: "Jeana", Username: "spammy"},
+		MessageID:         102,
+		Reason:            "zero-message",
+		DeletedMessageIDs: []int{100, 102},
+		Errors:            []string{"ban user: Bad Request: not enough rights to restrict/unrestrict chat member"},
+	}, cfg.ActionLogLimit); err != nil {
+		t.Fatal(err)
+	}
+
+	client := &fakeTelegramClient{memberStatus: "kicked"}
+	summary, err := RetryFailedModerationActions(cfg, store, client, now, 48*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Attempted != 1 || summary.AlreadyBanned != 1 || summary.Banned != 0 {
+		t.Fatalf("unexpected summary: %#v", summary)
+	}
+	if len(client.deleted) != 0 || len(client.banned) != 0 || len(client.sent) != 0 {
+		t.Fatalf("already-banned retry should not repeat actions: %#v", client)
+	}
+
+	actions := store.ModerationActions()
+	retry := actions[len(actions)-1]
+	if !retry.Retry || !retry.Banned || retry.User.ChatMemberStatus != "kicked" {
+		t.Fatalf("unexpected retry action: %#v", retry)
+	}
+}
+
 func TestRetryFailedModerationActionsSkipsOldFailure(t *testing.T) {
 	store, err := OpenFileStore(filepath.Join(t.TempDir(), "state.json"))
 	if err != nil {
@@ -146,5 +185,5 @@ func (client *failingRetryClient) SendMessage(int64, string) error {
 }
 
 func (client *failingRetryClient) FetchAccountEvidence(int64, tgbotapi.User) AccountEvidence {
-	panic("not used")
+	return AccountEvidence{ChatMemberStatus: "member"}
 }

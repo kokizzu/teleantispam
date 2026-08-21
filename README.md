@@ -48,7 +48,10 @@ for the bot.
 - [x] Deployed to the remote host.
 - [x] Remote service verified healthy.
 - [x] Hourly admin-promotion check deployed to the remote host.
+- [x] Hourly admin check notifies if admin/delete/ban permissions are revoked.
 - [x] Bot added as admin in `gophers_id`.
+- [x] One-shot retry command tested and run for pre-admin failed moderation
+      actions; bans were retried, while stale messages can remain non-deletable.
 - [ ] Live `gophers_id` test completed.
 
 ## Configuration
@@ -83,6 +86,7 @@ make build
 make remote-status
 make check-admin
 make retry-failed-moderation
+make remote-retry-failed-moderation
 TELEANTISPAM_DRY_RUN=true make run
 ```
 

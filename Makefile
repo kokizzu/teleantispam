@@ -4,7 +4,7 @@ VERSION ?= dev
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-.PHONY: fmt test build run tidy clean check-admin retry-failed-moderation deploy install-remote-env remote-status
+.PHONY: fmt test build run tidy clean check-admin retry-failed-moderation remote-retry-failed-moderation deploy install-remote-env remote-status
 
 fmt:
 	GO="$(GO)" bash scripts/fmt.sh
@@ -29,6 +29,9 @@ check-admin: build
 
 retry-failed-moderation: build
 	BINARY="bin/$(BINARY)" bash scripts/retry-failed-moderation.sh
+
+remote-retry-failed-moderation:
+	bash scripts/remote-retry-failed-moderation.sh
 
 deploy: build
 	bash scripts/deploy.sh
