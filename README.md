@@ -1,5 +1,9 @@
 # TelegramAntiSpam
 
+<p align="center">
+  <img src="assets/telegram-antispam-icon.png" alt="TelegramAntiSpam icon" width="180">
+</p>
+
 TelegramAntiSpam is a Telegram moderation bot for removing obvious spam from
 groups. It is intentionally conservative: users with 10 or more observed posts
 are never auto-banned or auto-deleted by the rule engine, even when a message
