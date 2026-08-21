@@ -48,8 +48,7 @@ for the bot.
 - [x] Deployed to the remote host.
 - [x] Remote service verified healthy.
 - [x] Hourly admin-promotion check deployed to the remote host.
-- [ ] Bot added as admin in `gophers_id` (waiting for a promoter-capable admin
-      because the current promotion attempt is blocked by an account restriction).
+- [x] Bot added as admin in `gophers_id`.
 - [ ] Live `gophers_id` test completed.
 
 ## Configuration
