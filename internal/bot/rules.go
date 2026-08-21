@@ -9,6 +9,9 @@ import (
 )
 
 var cryptoSpamPattern = regexp.MustCompile(`(?i)\b(airdrop|bitcoin|btc|crypto|defi|ethereum|eth|investment|pump|signal|ton|trading|usdt|wallet|web3)\b`)
+var unknownNoHistoryContactPattern = regexp.MustCompile(`(?i)(\bt\.me/[a-z0-9_]+|\btelegram\.me/[a-z0-9_]+|@[a-z0-9_]{4,})`)
+var unknownNoHistoryCryptoPitchPattern = regexp.MustCompile(`(?i)\b(airdrop|earned?|earning|income|investment|mentor(ship)?|profit|pump|signal|trading|usdt|wallet)\b`)
+var unknownNoHistoryCyrillicPitchPattern = regexp.MustCompile(`(?i)(график|доход|занятост|заработ|команд|набор|онлайн|подработ|пишите|работ|ставьте|удален)`)
 
 type MessageEvent struct {
 	ChatID    int64
@@ -46,7 +49,7 @@ func EvaluateMessage(cfg Config, history HistoryView, event MessageEvent) Modera
 		return ModerationDecision{}
 	}
 
-	if !eligibleLowHistory(cfg, history, event.At) {
+	if !eligibleLowHistory(cfg, history, event, reason) {
 		return ModerationDecision{}
 	}
 
@@ -65,14 +68,33 @@ func tooOldForModeration(cfg Config, event MessageEvent) bool {
 	return event.At.Before(event.Now.Add(-cfg.MaxMessageAge))
 }
 
-func eligibleLowHistory(cfg Config, history HistoryView, now time.Time) bool {
+func eligibleLowHistory(cfg Config, history HistoryView, event MessageEvent, reason string) bool {
+	now := event.At
 	if !history.JoinedAt.IsZero() && !now.Before(history.JoinedAt) && now.Sub(history.JoinedAt) <= cfg.JoinWindow {
 		return true
 	}
-	if cfg.AllowUnknownNoHistory && history.MessageCount <= cfg.LowHistoryPosts {
+	if history.MessageCount > cfg.LowHistoryPosts {
+		return false
+	}
+	if cfg.AllowUnknownNoHistory {
 		return true
 	}
-	return false
+	return highConfidenceUnknownNoHistorySpam(reason, event.Text)
+}
+
+func highConfidenceUnknownNoHistorySpam(reason string, text string) bool {
+	normalized := strings.TrimSpace(strings.ToLower(text))
+	if normalized == "" || !unknownNoHistoryContactPattern.MatchString(normalized) {
+		return false
+	}
+	switch reason {
+	case "crypto-keyword":
+		return unknownNoHistoryCryptoPitchPattern.MatchString(normalized)
+	case "cyrillic-heavy":
+		return unknownNoHistoryCyrillicPitchPattern.MatchString(normalized)
+	default:
+		return false
+	}
 }
 
 func suspiciousReason(text string) string {
@@ -106,7 +128,7 @@ func cjkHeavy(text string) bool {
 			latin++
 		}
 	}
-	return han >= 2 && latin <= 4
+	return han >= 2 && (latin <= 4 || han >= latin*3)
 }
 
 func cyrillicHeavy(text string) bool {
@@ -120,7 +142,7 @@ func cyrillicHeavy(text string) bool {
 			latin++
 		}
 	}
-	return cyrillic >= 2 && latin <= 4
+	return cyrillic >= 2 && (latin <= 4 || cyrillic >= latin*3)
 }
 
 func messageIDsToDelete(previous []int, current int, limit int) []int {

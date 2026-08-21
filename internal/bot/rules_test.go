@@ -123,6 +123,70 @@ func TestEvaluateMessageAllowsUnknownNoHistoryUserByDefault(t *testing.T) {
 	}
 }
 
+func TestEvaluateMessageModeratesUnknownNoHistoryHighConfidenceCryptoReferral(t *testing.T) {
+	now := time.Unix(1000, 0)
+	decision := EvaluateMessage(testConfig(), HistoryView{
+		MessageCount: 1,
+	}, MessageEvent{
+		MessageID: 10,
+		Text:      "I can honestly say that t.me/AdamBiernat10 helped my trading success and I earned good amount from trading.",
+		At:        now,
+		Now:       now,
+	})
+
+	if !decision.Moderate || decision.Reason != "crypto-keyword" {
+		t.Fatalf("expected high-confidence unknown crypto referral moderation, got %#v", decision)
+	}
+}
+
+func TestEvaluateMessageModeratesUnknownNoHistoryHighConfidenceCyrillicRecruitment(t *testing.T) {
+	now := time.Unix(1000, 0)
+	decision := EvaluateMessage(testConfig(), HistoryView{
+		MessageCount: 1,
+	}, MessageEvent{
+		MessageID: 10,
+		Text:      "Ищете комфортную подработку или полноценную занятость онлайн? Доход зависит от активности. Ставьте + @evgenyya_hrr",
+		At:        now,
+		Now:       now,
+	})
+
+	if !decision.Moderate || decision.Reason != "cyrillic-heavy" {
+		t.Fatalf("expected high-confidence unknown cyrillic recruitment moderation, got %#v", decision)
+	}
+}
+
+func TestEvaluateMessageAllowsUnknownNoHistoryPlainCyrillic(t *testing.T) {
+	now := time.Unix(1000, 0)
+	decision := EvaluateMessage(testConfig(), HistoryView{
+		MessageCount: 1,
+	}, MessageEvent{
+		MessageID: 10,
+		Text:      "Привет, я изучаю Go и хочу задать вопрос",
+		At:        now,
+		Now:       now,
+	})
+
+	if decision.Moderate {
+		t.Fatalf("expected plain unknown cyrillic text to be allowed, got %#v", decision)
+	}
+}
+
+func TestEvaluateMessageAllowsUnknownNoHistoryPlainCryptoQuestion(t *testing.T) {
+	now := time.Unix(1000, 0)
+	decision := EvaluateMessage(testConfig(), HistoryView{
+		MessageCount: 1,
+	}, MessageEvent{
+		MessageID: 10,
+		Text:      "I have a Go crypto package question about signatures",
+		At:        now,
+		Now:       now,
+	})
+
+	if decision.Moderate {
+		t.Fatalf("expected plain unknown crypto question to be allowed, got %#v", decision)
+	}
+}
+
 func TestEvaluateMessageCanModerateUnknownNoHistoryUserWhenEnabled(t *testing.T) {
 	now := time.Unix(1000, 0)
 	cfg := testConfig()

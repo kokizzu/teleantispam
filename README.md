@@ -9,10 +9,12 @@ groups. It is intentionally conservative: users with 10 or more observed posts
 are never auto-banned or auto-deleted by the rule engine, even when a message
 looks suspicious.
 
-By default, auto-ban requires that the bot observed the user joining recently.
-This avoids treating an old group member as "new" only because the bot was just
-started with an empty state file. The looser no-history path can be enabled with
-`TELEANTISPAM_ALLOW_UNKNOWN_NO_HISTORY=true` after accepting that tradeoff.
+By default, auto-ban requires that the bot observed the user joining recently,
+except for high-confidence one-message spam that combines an external contact
+handle with a money/work pitch. This avoids treating an old group member as
+"new" only because the bot was just started with an empty state file. The looser
+no-history path can be enabled with `TELEANTISPAM_ALLOW_UNKNOWN_NO_HISTORY=true`
+after accepting that tradeoff.
 
 The intended moderation action mirrors the manual Telegram flow:
 
@@ -43,6 +45,8 @@ for the bot.
 - [x] Administrator and creator safety guard tested.
 - [x] Failed Telegram member lookup is fail-closed and tested.
 - [x] Unknown no-history users are not moderated by default; opt-in path tested.
+- [x] High-confidence unknown no-history crypto and Cyrillic recruitment spam
+      moderation tested.
 - [x] Post-ban notification message implemented and tested.
 - [x] Structured moderation action logs collect available account evidence and
       Telegram API limitation notes.
