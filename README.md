@@ -52,7 +52,7 @@ for the bot.
 - [x] Bot added as admin in `gophers_id`.
 - [x] One-shot retry command tested and run for pre-admin failed moderation
       actions; bans were retried, while stale messages can remain non-deletable.
-- [ ] Live `gophers_id` test completed.
+- [x] Live `gophers_id` test completed.
 
 ## Configuration
 
