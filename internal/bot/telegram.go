@@ -22,6 +22,14 @@ type botAPIClient struct {
 	bot *tgbotapi.BotAPI
 }
 
+func NewTelegramClient(token string) (TelegramClient, error) {
+	api, err := tgbotapi.NewBotAPI(token)
+	if err != nil {
+		return nil, err
+	}
+	return botAPIClient{bot: api}, nil
+}
+
 func Run(ctx context.Context, cfg Config, store *FileStore) error {
 	api, err := tgbotapi.NewBotAPI(cfg.Token)
 	if err != nil {
@@ -327,11 +335,23 @@ func ApplyChatMemberEvidence(evidence *AccountEvidence, member tgbotapi.ChatMemb
 }
 
 func BanNotice(user tgbotapi.User, reason string, deletedCount int) string {
-	username := "-"
-	if user.UserName != "" {
-		username = "@" + user.UserName
+	return banNotice(user.ID, fullName(user), user.UserName, reason, deletedCount)
+}
+
+func BanNoticeFromEvidence(user AccountEvidence, reason string, deletedCount int) string {
+	name := strings.TrimSpace(strings.TrimSpace(user.FirstName) + " " + strings.TrimSpace(user.LastName))
+	if name == "" {
+		name = "-"
 	}
-	return fmt.Sprintf("%d / %s / %s is banned because %s, %d messages deleted", user.ID, fullName(user), username, reason, deletedCount)
+	return banNotice(user.ID, name, user.Username, reason, deletedCount)
+}
+
+func banNotice(userID int64, name string, rawUsername string, reason string, deletedCount int) string {
+	username := "-"
+	if rawUsername != "" {
+		username = "@" + rawUsername
+	}
+	return fmt.Sprintf("%d / %s / %s is banned because %s, %d messages deleted", userID, name, username, reason, deletedCount)
 }
 
 func protectedChatMemberStatus(status string) bool {

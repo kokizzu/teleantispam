@@ -52,6 +52,8 @@ type ModerationAction struct {
 	DeletedCount               int             `json:"deleted_count"`
 	Banned                     bool            `json:"banned"`
 	DryRun                     bool            `json:"dry_run"`
+	Retry                      bool            `json:"retry,omitempty"`
+	RetryOf                    time.Time       `json:"retry_of,omitempty"`
 	TelegramLimitations        []string        `json:"telegram_limitations,omitempty"`
 	Errors                     []string        `json:"errors,omitempty"`
 }

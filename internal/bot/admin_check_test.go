@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -105,6 +106,32 @@ func TestShouldNotifyAdminReadyOnlyOnTransition(t *testing.T) {
 	}
 	if shouldNotifyAdminReady(AdminCheckResult{ReadyNotified: true}, ready) {
 		t.Fatal("did not expect notification after previous notification")
+	}
+}
+
+func TestShouldNotifyAdminRevokedOnlyOnRegression(t *testing.T) {
+	ready := AdminCheckResult{AdminReady: true}
+	notReady := AdminCheckResult{AdminReady: false}
+
+	if !shouldNotifyAdminRevoked(ready, notReady) {
+		t.Fatal("expected notification on ready to not-ready regression")
+	}
+	if shouldNotifyAdminRevoked(notReady, notReady) {
+		t.Fatal("did not expect repeated not-ready notification")
+	}
+	if shouldNotifyAdminRevoked(ready, AdminCheckResult{AdminReady: false, RevokedNotified: true}) {
+		t.Fatal("did not expect notification after previous revoked notification")
+	}
+}
+
+func TestAdminRevokedNotificationText(t *testing.T) {
+	text := adminRevokedNotificationText(AdminCheckResult{
+		Chat:          "@gophers_id",
+		BotUsername:   "TeleAntiSpam2Bot",
+		MissingRights: []string{"can_delete_messages", "can_restrict_members"},
+	})
+	if !strings.Contains(text, "promoter-capable admin") {
+		t.Fatalf("missing promoter-capable admin guidance: %q", text)
 	}
 }
 

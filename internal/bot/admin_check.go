@@ -32,6 +32,9 @@ type AdminCheckResult struct {
 	ReadyNotified      bool      `json:"ready_notified"`
 	ReadyNotifyChat    string    `json:"ready_notify_chat,omitempty"`
 	ReadyNotifyError   string    `json:"ready_notify_error,omitempty"`
+	RevokedNotified    bool      `json:"revoked_notified"`
+	RevokedNotifyChat  string    `json:"revoked_notify_chat,omitempty"`
+	RevokedNotifyError string    `json:"revoked_notify_error,omitempty"`
 	Error              string    `json:"error,omitempty"`
 }
 
@@ -62,8 +65,9 @@ func RunAdminCheck(token string, chat string, statusPath string, notifyChat stri
 	}
 
 	result = EvaluateAdminCheckResult(chat, api.Self, member, now)
+	notifyTarget := adminCheckNotifyChat(notifyChat, chat)
 	if shouldNotifyAdminReady(previous, result) {
-		result.ReadyNotifyChat = adminCheckNotifyChat(notifyChat, chat)
+		result.ReadyNotifyChat = notifyTarget
 		if err := sendAdminReadyNotification(api, result.ReadyNotifyChat, result); err != nil {
 			result.ReadyNotifyError = err.Error()
 		} else {
@@ -73,6 +77,19 @@ func RunAdminCheck(token string, chat string, statusPath string, notifyChat stri
 		result.ReadyNotified = true
 		result.ReadyNotifyChat = previous.ReadyNotifyChat
 	}
+
+	if shouldNotifyAdminRevoked(previous, result) {
+		result.RevokedNotifyChat = notifyTarget
+		if err := sendAdminRevokedNotification(api, result.RevokedNotifyChat, result); err != nil {
+			result.RevokedNotifyError = err.Error()
+		} else {
+			result.RevokedNotified = true
+		}
+	} else if previous.RevokedNotified && !result.AdminReady {
+		result.RevokedNotified = true
+		result.RevokedNotifyChat = previous.RevokedNotifyChat
+	}
+
 	if err := WriteAdminCheckResult(statusPath, result); err != nil {
 		return result, err
 	}
@@ -174,8 +191,17 @@ func shouldNotifyAdminReady(previous AdminCheckResult, current AdminCheckResult)
 	return current.AdminReady && !previous.AdminReady && !previous.ReadyNotified && current.Error == ""
 }
 
+func shouldNotifyAdminRevoked(previous AdminCheckResult, current AdminCheckResult) bool {
+	return previous.AdminReady && !current.AdminReady && !current.RevokedNotified && current.Error == ""
+}
+
 func sendAdminReadyNotification(api *tgbotapi.BotAPI, chat string, result AdminCheckResult) error {
 	_, err := api.Send(adminCheckMessageConfig(chat, adminReadyNotificationText(result)))
+	return err
+}
+
+func sendAdminRevokedNotification(api *tgbotapi.BotAPI, chat string, result AdminCheckResult) error {
+	_, err := api.Send(adminCheckMessageConfig(chat, adminRevokedNotificationText(result)))
 	return err
 }
 
@@ -185,6 +211,18 @@ func adminReadyNotificationText(result AdminCheckResult) string {
 		username = "@" + result.BotUsername
 	}
 	return fmt.Sprintf("%s is admin-ready in %s: delete messages and ban/restrict users rights are present. Live test can be run.", username, result.Chat)
+}
+
+func adminRevokedNotificationText(result AdminCheckResult) string {
+	username := "-"
+	if result.BotUsername != "" {
+		username = "@" + result.BotUsername
+	}
+	missing := "-"
+	if len(result.MissingRights) > 0 {
+		missing = strings.Join(result.MissingRights, ",")
+	}
+	return fmt.Sprintf("%s is no longer admin-ready in %s: missing %s. Please have a promoter-capable admin restore delete messages and ban/restrict users rights.", username, result.Chat, missing)
 }
 
 func adminCheckNotifyChat(notifyChat string, checkChat string) string {
