@@ -1,5 +1,5 @@
 [Unit]
-Description=TelegramAntiSpam gophers_id admin-right check
+Description=TeleAntiSpam2Bot gophers_id admin-right check
 Wants=network-online.target
 After=network-online.target
 

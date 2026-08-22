@@ -1,5 +1,5 @@
 [Unit]
-Description=Run TelegramAntiSpam gophers_id admin-right check hourly
+Description=Run TeleAntiSpam2Bot gophers_id admin-right check hourly
 
 [Timer]
 OnBootSec=2m

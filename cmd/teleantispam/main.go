@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kokizzu/teleantispam/internal/bot"
+	"github.com/kokizzu/TeleAntiSpam2Bot/internal/bot"
 )
 
 var (
@@ -30,7 +30,7 @@ func main() {
 	retryFailedMaxAge := flag.Duration("retry-failed-max-age", envDurationDefault("TELEANTISPAM_RETRY_FAILED_ACTION_MAX_AGE", bot.DefaultRetryFailedActionMaxAge), "maximum age of failed moderation actions to retry")
 	flag.Parse()
 	if *showVersion {
-		fmt.Printf("TelegramAntiSpam version=%s commit=%s\n", version, commit)
+		fmt.Printf("TeleAntiSpam2Bot version=%s commit=%s\n", version, commit)
 		return
 	}
 	if *checkAdmin {
@@ -71,7 +71,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	log.Printf("starting TelegramAntiSpam version=%s commit=%s dry_run=%t", version, commit, cfg.DryRun)
+	log.Printf("starting TeleAntiSpam2Bot version=%s commit=%s dry_run=%t", version, commit, cfg.DryRun)
 	if err := bot.Run(ctx, cfg, store); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatalf("run bot: %v", err)
 	}

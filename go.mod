@@ -1,4 +1,4 @@
-module github.com/kokizzu/teleantispam
+module github.com/kokizzu/TeleAntiSpam2Bot
 
 go 1.26.4
 

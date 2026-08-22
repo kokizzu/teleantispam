@@ -35,7 +35,7 @@ func Run(ctx context.Context, cfg Config, store *FileStore) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("authorized TelegramAntiSpam as @%s", api.Self.UserName)
+	log.Printf("authorized TeleAntiSpam2Bot as @%s", api.Self.UserName)
 
 	client := botAPIClient{bot: api}
 	nextOffset, err := drainPendingUpdates(ctx, api, cfg, store, client)
