@@ -11,7 +11,8 @@ fi
 
 ssh_opts=(-x -o BatchMode=yes -o ConnectTimeout=15)
 
-ssh "${ssh_opts[@]}" "$host" 'set -e
+ssh "${ssh_opts[@]}" "$host" 'bash -s' <<'REMOTE'
+set -e
 echo "== binary =="
 if [ -x /usr/local/bin/teleantispam ]; then
   /usr/local/bin/teleantispam -version || true
@@ -39,7 +40,7 @@ fi
 
 echo "== moderation stats =="
 if [ -s /var/lib/teleantispam/state.json ]; then
-  python3 - <<'"'"'PY'"'"'
+  python3 - <<'PY'
 import json
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -62,7 +63,11 @@ def format_time(value):
     if not value:
         return "-"
     if isinstance(value, str):
+        if value.startswith("0001-01-01"):
+            return "state-start"
         return value
+    if value.year == 1:
+        return "state-start"
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 def snapshot(actions, from_time=None, to_time=None):
@@ -174,4 +179,4 @@ journalctl -u teleantispam.service -n 30 -o cat --no-pager || true
 
 echo "== recent admin check logs =="
 journalctl -u teleantispam-admin-check.service -n 20 -o cat --no-pager || true
-'
+REMOTE
