@@ -72,9 +72,58 @@ func main() {
 	defer stop()
 
 	log.Printf("starting TeleAntiSpam2Bot version=%s commit=%s dry_run=%t", version, commit, cfg.DryRun)
+	startupStats, err := store.RecordStartupStats(time.Now())
+	if err != nil {
+		log.Fatalf("record startup stats: %v", err)
+	}
+	logStartupStats(startupStats)
 	if err := bot.Run(ctx, cfg, store); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatalf("run bot: %v", err)
 	}
+}
+
+func logStartupStats(stats bot.StartupStats) {
+	previousFrom := stats.PreviousStartupAt.Format(time.RFC3339)
+	if stats.PreviousStartupAt.IsZero() {
+		previousFrom = "state-start"
+	}
+	seeded := ""
+	if stats.PreviousRunSeededFromAllActionLog {
+		seeded = " seeded_from_action_log=true"
+	}
+	log.Printf(
+		"startup_stats tracked_chats=%d tracked_users=%d observed_messages=%d all_time_actions=%d all_time_bans=%d all_time_deleted=%d all_time_failed=%d all_time_dry_run=%d all_time_retry=%d all_time_reasons=%s previous_from=%s previous_actions=%d previous_bans=%d previous_deleted=%d previous_failed=%d previous_dry_run=%d previous_retry=%d previous_reasons=%s%s",
+		stats.TrackedChats,
+		stats.TrackedUsers,
+		stats.ObservedMessages,
+		stats.AllTime.ModerationActions,
+		stats.AllTime.Bans,
+		stats.AllTime.DeletedMessages,
+		stats.AllTime.FailedActions,
+		stats.AllTime.DryRunActions,
+		stats.AllTime.RetryActions,
+		formatReasonStats(stats.AllTime.Reasons),
+		previousFrom,
+		stats.PreviousRun.ModerationActions,
+		stats.PreviousRun.Bans,
+		stats.PreviousRun.DeletedMessages,
+		stats.PreviousRun.FailedActions,
+		stats.PreviousRun.DryRunActions,
+		stats.PreviousRun.RetryActions,
+		formatReasonStats(stats.PreviousRun.Reasons),
+		seeded,
+	)
+}
+
+func formatReasonStats(reasons []bot.ReasonStats) string {
+	if len(reasons) == 0 {
+		return "-"
+	}
+	parts := make([]string, 0, len(reasons))
+	for _, reason := range reasons {
+		parts = append(parts, fmt.Sprintf("%s:%d/%d/%d", reason.Reason, reason.ModerationActions, reason.Bans, reason.DeletedMessages))
+	}
+	return strings.Join(parts, ",")
 }
 
 func envDefault(key string, fallback string) string {

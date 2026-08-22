@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -20,6 +21,43 @@ type FileStore struct {
 type persistentState struct {
 	Chats             map[string]map[string]*UserHistory `json:"chats"`
 	ModerationActions []ModerationAction                 `json:"moderation_actions,omitempty"`
+	Stats             *StartupStatsState                 `json:"stats,omitempty"`
+}
+
+type StartupStatsState struct {
+	LastStartupAt time.Time               `json:"last_startup_at,omitempty"`
+	AllTime       ModerationStatsSnapshot `json:"all_time"`
+	PreviousRun   ModerationStatsSnapshot `json:"previous_run"`
+}
+
+type StartupStats struct {
+	StartupAt                         time.Time
+	PreviousStartupAt                 time.Time
+	PreviousRunSeededFromAllActionLog bool
+	TrackedChats                      int
+	TrackedUsers                      int
+	ObservedMessages                  int
+	AllTime                           ModerationStatsSnapshot
+	PreviousRun                       ModerationStatsSnapshot
+}
+
+type ModerationStatsSnapshot struct {
+	From              time.Time     `json:"from,omitempty"`
+	To                time.Time     `json:"to,omitempty"`
+	ModerationActions int           `json:"moderation_actions"`
+	Bans              int           `json:"bans"`
+	DeletedMessages   int           `json:"deleted_messages"`
+	FailedActions     int           `json:"failed_actions"`
+	DryRunActions     int           `json:"dry_run_actions"`
+	RetryActions      int           `json:"retry_actions"`
+	Reasons           []ReasonStats `json:"reasons,omitempty"`
+}
+
+type ReasonStats struct {
+	Reason            string `json:"reason"`
+	ModerationActions int    `json:"moderation_actions"`
+	Bans              int    `json:"bans"`
+	DeletedMessages   int    `json:"deleted_messages"`
 }
 
 type UserHistory struct {
@@ -178,6 +216,124 @@ func (store *FileStore) ModerationActions() []ModerationAction {
 	defer store.mu.Unlock()
 
 	return append([]ModerationAction(nil), store.state.ModerationActions...)
+}
+
+func (store *FileStore) RecordStartupStats(now time.Time) (StartupStats, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	if now.IsZero() {
+		now = time.Now()
+	}
+	if store.state.Stats == nil {
+		store.state.Stats = &StartupStatsState{}
+	}
+
+	previousStartupAt := store.state.Stats.LastStartupAt
+	allTime := moderationStatsSnapshot(store.state.ModerationActions, time.Time{}, time.Time{})
+	previousRun := moderationStatsSnapshot(store.state.ModerationActions, previousStartupAt, now)
+	seededFromAllActionLog := previousStartupAt.IsZero()
+	if seededFromAllActionLog {
+		previousRun = allTime
+		previousRun.To = now
+	}
+
+	trackedChats, trackedUsers, observedMessages := store.trackedTotalsLocked()
+	stats := StartupStats{
+		StartupAt:                         now,
+		PreviousStartupAt:                 previousStartupAt,
+		PreviousRunSeededFromAllActionLog: seededFromAllActionLog,
+		TrackedChats:                      trackedChats,
+		TrackedUsers:                      trackedUsers,
+		ObservedMessages:                  observedMessages,
+		AllTime:                           allTime,
+		PreviousRun:                       previousRun,
+	}
+
+	store.state.Stats.LastStartupAt = now
+	store.state.Stats.AllTime = allTime
+	store.state.Stats.PreviousRun = previousRun
+	if err := store.saveLocked(); err != nil {
+		return StartupStats{}, err
+	}
+	return stats, nil
+}
+
+func moderationStatsSnapshot(actions []ModerationAction, from time.Time, to time.Time) ModerationStatsSnapshot {
+	stats := ModerationStatsSnapshot{
+		From: from,
+		To:   to,
+	}
+	byReason := make(map[string]*ReasonStats)
+	for _, action := range actions {
+		if !from.IsZero() && action.At.Before(from) {
+			continue
+		}
+		if !to.IsZero() && !action.At.Before(to) {
+			continue
+		}
+		stats.ModerationActions++
+		if action.Banned {
+			stats.Bans++
+		}
+		stats.DeletedMessages += action.DeletedCount
+		if len(action.Errors) > 0 {
+			stats.FailedActions++
+		}
+		if action.DryRun {
+			stats.DryRunActions++
+		}
+		if action.Retry {
+			stats.RetryActions++
+		}
+		reason := action.Reason
+		if reason == "" {
+			reason = "unknown"
+		}
+		reasonStats := byReason[reason]
+		if reasonStats == nil {
+			reasonStats = &ReasonStats{Reason: reason}
+			byReason[reason] = reasonStats
+		}
+		reasonStats.ModerationActions++
+		if action.Banned {
+			reasonStats.Bans++
+		}
+		reasonStats.DeletedMessages += action.DeletedCount
+	}
+	if len(byReason) > 0 {
+		reasons := make([]ReasonStats, 0, len(byReason))
+		for _, reasonStats := range byReason {
+			reasons = append(reasons, *reasonStats)
+		}
+		sort.Slice(reasons, func(i, j int) bool {
+			if reasons[i].ModerationActions != reasons[j].ModerationActions {
+				return reasons[i].ModerationActions > reasons[j].ModerationActions
+			}
+			return reasons[i].Reason < reasons[j].Reason
+		})
+		stats.Reasons = reasons
+	}
+	return stats
+}
+
+func (store *FileStore) trackedTotalsLocked() (int, int, int) {
+	trackedChats := 0
+	trackedUsers := 0
+	observedMessages := 0
+	for _, users := range store.state.Chats {
+		if len(users) == 0 {
+			continue
+		}
+		trackedChats++
+		trackedUsers += len(users)
+		for _, history := range users {
+			if history != nil {
+				observedMessages += history.MessageCount
+			}
+		}
+	}
+	return trackedChats, trackedUsers, observedMessages
 }
 
 func (store *FileStore) historyLocked(chatID int64, userID int64) *UserHistory {
