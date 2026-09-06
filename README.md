@@ -10,8 +10,9 @@ are never auto-banned or auto-deleted by the rule engine, even when a message
 looks suspicious.
 
 By default, auto-ban requires that the bot observed the user joining recently,
-except for high-confidence one-message spam that combines an external contact
-handle with a money/work pitch. This avoids treating an old group member as
+except for high-confidence one-message spam such as an external contact handle
+with a money/work pitch or a commercial-finance phrase with a private Telegram
+invite. This avoids treating an old group member as
 "new" only because the bot was just started with an empty state file. The looser
 no-history path can be enabled with `TELEANTISPAM_ALLOW_UNKNOWN_NO_HISTORY=true`
 after accepting that tradeoff.
@@ -48,6 +49,13 @@ for the bot.
       path tested.
 - [x] High-confidence unknown no-history crypto and Cyrillic recruitment spam
       moderation tested.
+- [x] Commercial-finance spam with `t.me/+...` or legacy `joinchat` private
+      invites is detected, with benign private Go invites and finance discussion
+      controls tested.
+- [x] Forwarded finance-channel metadata is preserved and evaluated.
+- [x] Telegram transport errors redact the bot token from logged request URLs.
+- [x] Reviewable plan/apply workflow implemented for manually remediating an
+      already-posted spam message using the bot's persisted message ownership.
 - [x] Post-ban notification message implemented and tested.
 - [x] Structured moderation action logs collect available account evidence and
       Telegram API limitation notes.
@@ -98,11 +106,22 @@ make remote-status
 make check-admin
 make retry-failed-moderation
 make remote-retry-failed-moderation
+make inspect-telegram-message
+make remote-find-message
+make plan-remote-manual-moderation
+make apply-remote-manual-moderation
 TELEANTISPAM_DRY_RUN=true make run
 ```
 
 For local secrets, create `.env.override`. It is ignored by git and loaded by
 `make run`, `make deploy`, and `make install-remote-env`.
+
+For a missed public message, put its URL in
+`tmp/telegram-message-url.txt`, inspect it, then put its numeric message ID in
+`tmp/telegram-message-id.txt` and resolve its persisted chat/user ownership.
+Create `tmp/manual-moderation-request.json` from that evidence and run the plan
+target. The apply target refuses a missing or stale plan. These request, plan,
+and result files remain ignored under `tmp/`.
 
 ## Deployment
 

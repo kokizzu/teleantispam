@@ -9,3 +9,5 @@ teleantispam.env
 .env.local
 .env.override
 .env.*.local
+__pycache__/
+*.pyc

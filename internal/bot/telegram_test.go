@@ -1,6 +1,9 @@
 package bot
 
 import (
+	"context"
+	"errors"
+	"net/url"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -118,6 +121,53 @@ func TestHandleMessageDeletesRecentMessagesBansLogsAndNotifies(t *testing.T) {
 	}
 }
 
+func TestHandleMessageModeratesFinancePrivateInviteRegression(t *testing.T) {
+	store, err := OpenFileStore(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig()
+	client := &fakeTelegramClient{}
+	now := time.Unix(1000, 0)
+
+	err = HandleMessage(cfg, store, client, &tgbotapi.Message{
+		MessageID: 42,
+		Date:      int(now.Unix()),
+		Chat:      &tgbotapi.Chat{ID: -100123, Type: "supergroup", Title: "Gophers", UserName: "gophers"},
+		From:      &tgbotapi.User{ID: 55, FirstName: "Spam", LastName: "Sender", UserName: "spam_sender"},
+		Text:      "I'm only doing this out of joy Unicorn Finance Company is a proof that legit companies still exists\n\nhttps://t.me/+PrivateInvite123",
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(client.deleted, []int{42}) {
+		t.Fatalf("expected offending message deletion, got %#v", client.deleted)
+	}
+	if !reflect.DeepEqual(client.banned, []int64{55}) {
+		t.Fatalf("expected sender ban, got %#v", client.banned)
+	}
+	actions := store.ModerationActions()
+	if len(actions) != 1 || actions[0].Reason != "finance-private-invite" {
+		t.Fatalf("unexpected moderation log: %#v", actions)
+	}
+}
+
+func TestTelegramRequestErrorRedactsBotToken(t *testing.T) {
+	const token = "123456:secret-token"
+	err := telegramRequestError(&url.Error{
+		Op:  "Post",
+		URL: "https://api.telegram.org/bot" + token + "/getUpdates",
+		Err: context.DeadlineExceeded,
+	})
+	if strings.Contains(err.Error(), token) {
+		t.Fatalf("request error leaked bot token: %v", err)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected wrapped root cause, got %v", err)
+	}
+}
+
 func TestHandleMessageDoesNotModerateObservedTenPostUser(t *testing.T) {
 	store, err := OpenFileStore(filepath.Join(t.TempDir(), "state.json"))
 	if err != nil {
@@ -224,6 +274,77 @@ func TestHandleMessageDoesNotModerateWhenMemberLookupFails(t *testing.T) {
 	}
 	if len(client.deleted) != 0 || len(client.banned) != 0 || len(store.ModerationActions()) != 0 {
 		t.Fatalf("unverified member must not be moderated; deleted=%#v banned=%#v actions=%#v", client.deleted, client.banned, store.ModerationActions())
+	}
+}
+
+func TestHandleMessageModeratesLegacyForwardedFinanceGroup(t *testing.T) {
+	store, err := OpenFileStore(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig()
+	client := &fakeTelegramClient{}
+	now := time.Unix(1000, 0)
+
+	err = HandleMessage(cfg, store, client, &tgbotapi.Message{
+		MessageID:       1,
+		Date:            int(now.Unix()),
+		Chat:            &tgbotapi.Chat{ID: -100123},
+		From:            &tgbotapi.User{ID: 79, FirstName: "Forwarder"},
+		ForwardFromChat: &tgbotapi.Chat{ID: -200, Type: "channel", Title: "Crypto Finance Signals", UserName: "cryptosignals"},
+		Text:            "Join our VIP trading signals for daily profit.",
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(client.deleted, []int{1}) || !reflect.DeepEqual(client.banned, []int64{79}) {
+		t.Fatalf("expected forwarded finance group moderation, deleted=%#v banned=%#v", client.deleted, client.banned)
+	}
+	actions := store.ModerationActions()
+	if len(actions) != 1 || actions[0].Reason != "forwarded-finance-group" {
+		t.Fatalf("unexpected action log: %#v", actions)
+	}
+}
+
+func TestHandleRawUpdateModeratesForwardOriginFinanceGroup(t *testing.T) {
+	store, err := OpenFileStore(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := testConfig()
+	client := &fakeTelegramClient{}
+	now := time.Unix(1000, 0)
+
+	nextOffset, err := HandleRawUpdates(cfg, store, client, []rawTelegramUpdate{
+		{
+			UpdateID: 30,
+			Message: &rawTelegramMessage{
+				Message: tgbotapi.Message{
+					MessageID: 1,
+					Date:      int(now.Unix()),
+					Chat:      &tgbotapi.Chat{ID: -100123},
+					From:      &tgbotapi.User{ID: 79, FirstName: "Forwarder"},
+					Text:      "Join our VIP trading signals for daily profit.",
+				},
+				ForwardOrigin: &MessageForwardOrigin{
+					Type: "channel",
+					Chat: &tgbotapi.Chat{ID: -200, Type: "channel", Title: "Crypto Finance Signals", UserName: "cryptosignals"},
+				},
+			},
+		},
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if nextOffset != 31 {
+		t.Fatalf("unexpected next offset: %d", nextOffset)
+	}
+	if !reflect.DeepEqual(client.deleted, []int{1}) || !reflect.DeepEqual(client.banned, []int64{79}) {
+		t.Fatalf("expected forwarded finance group moderation, deleted=%#v banned=%#v", client.deleted, client.banned)
+	}
+	actions := store.ModerationActions()
+	if len(actions) != 1 || actions[0].Reason != "forwarded-finance-group" {
+		t.Fatalf("unexpected action log: %#v", actions)
 	}
 }
 

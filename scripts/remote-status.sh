@@ -175,8 +175,10 @@ else
 fi
 
 echo "== recent logs =="
-journalctl -u teleantispam.service -n 30 -o cat --no-pager || true
+journalctl -u teleantispam.service -n 30 -o cat --no-pager \
+  | sed -E 's#(https://api\.telegram\.org/bot)[^/[:space:]]+/#\1<redacted>/#g' || true
 
 echo "== recent admin check logs =="
-journalctl -u teleantispam-admin-check.service -n 20 -o cat --no-pager || true
+journalctl -u teleantispam-admin-check.service -n 20 -o cat --no-pager \
+  | sed -E 's#(https://api\.telegram\.org/bot)[^/[:space:]]+/#\1<redacted>/#g' || true
 REMOTE

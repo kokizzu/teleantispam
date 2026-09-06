@@ -139,6 +139,127 @@ func TestEvaluateMessageModeratesUnknownNoHistoryHighConfidenceCryptoReferral(t 
 	}
 }
 
+func TestEvaluateMessageModeratesUnknownNoHistoryFinancePrivateInvite(t *testing.T) {
+	now := time.Unix(1000, 0)
+	decision := EvaluateMessage(testConfig(), HistoryView{
+		MessageCount: 1,
+	}, MessageEvent{
+		MessageID: 42,
+		Text:      "I'm only doing this out of joy Unicorn Finance Company is a proof that legit companies still exists\n\nhttps://t.me/+PrivateInvite123",
+		At:        now,
+		Now:       now,
+	})
+
+	if !decision.Moderate || decision.Reason != "finance-private-invite" {
+		t.Fatalf("expected finance private-invite moderation, got %#v", decision)
+	}
+}
+
+func TestEvaluateMessageAllowsUnknownNoHistoryPrivateGoGroupInvite(t *testing.T) {
+	now := time.Unix(1000, 0)
+	decision := EvaluateMessage(testConfig(), HistoryView{
+		MessageCount: 1,
+	}, MessageEvent{
+		MessageID: 11,
+		Text:      "Join our private Go study group https://t.me/+PrivateInvite123",
+		At:        now,
+		Now:       now,
+	})
+
+	if decision.Moderate {
+		t.Fatalf("expected non-finance private group invite to be allowed, got %#v", decision)
+	}
+}
+
+func TestEvaluateMessageAllowsUnknownNoHistoryFinanceDiscussionWithoutInvite(t *testing.T) {
+	now := time.Unix(1000, 0)
+	decision := EvaluateMessage(testConfig(), HistoryView{
+		MessageCount: 1,
+	}, MessageEvent{
+		MessageID: 12,
+		Text:      "Is Unicorn Finance Company legitimate?",
+		At:        now,
+		Now:       now,
+	})
+
+	if decision.Moderate {
+		t.Fatalf("expected finance discussion without a private invite to be allowed, got %#v", decision)
+	}
+}
+
+func TestEvaluateMessageModeratesForwardedFinanceGroupPost(t *testing.T) {
+	now := time.Unix(1000, 0)
+	decision := EvaluateMessage(testConfig(), HistoryView{
+		MessageCount: 1,
+	}, MessageEvent{
+		MessageID:                 10,
+		Text:                      "Join our VIP trading signals for daily profit.",
+		At:                        now,
+		Now:                       now,
+		ForwardedFromChat:         true,
+		ForwardedFromChatTitle:    "Crypto Finance Signals",
+		ForwardedFromChatUsername: "cryptosignals",
+	})
+
+	if !decision.Moderate || decision.Reason != "forwarded-finance-group" {
+		t.Fatalf("expected forwarded-finance-group moderation, got %#v", decision)
+	}
+}
+
+func TestEvaluateMessageModeratesForwardedFinanceGroupBySourceTitle(t *testing.T) {
+	now := time.Unix(1000, 0)
+	decision := EvaluateMessage(testConfig(), HistoryView{
+		MessageCount: 1,
+	}, MessageEvent{
+		MessageID:              10,
+		Text:                   "Join the channel for daily signals.",
+		At:                     now,
+		Now:                    now,
+		ForwardedFromChat:      true,
+		ForwardedFromChatTitle: "Forex Trading Signals",
+	})
+
+	if !decision.Moderate || decision.Reason != "forwarded-finance-group" {
+		t.Fatalf("expected forwarded-finance-group moderation from source title, got %#v", decision)
+	}
+}
+
+func TestEvaluateMessageAllowsForwardedGoCryptoQuestion(t *testing.T) {
+	now := time.Unix(1000, 0)
+	decision := EvaluateMessage(testConfig(), HistoryView{
+		MessageCount: 1,
+	}, MessageEvent{
+		MessageID:              10,
+		Text:                   "I have a Go crypto package question about signatures",
+		At:                     now,
+		Now:                    now,
+		ForwardedFromChat:      true,
+		ForwardedFromChatTitle: "Gophers Indonesia",
+	})
+
+	if decision.Moderate {
+		t.Fatalf("expected forwarded Go crypto package question to be allowed, got %#v", decision)
+	}
+}
+
+func TestEvaluateMessageAllowsForwardedNonFinanceGroupPost(t *testing.T) {
+	now := time.Unix(1000, 0)
+	decision := EvaluateMessage(testConfig(), HistoryView{
+		MessageCount: 1,
+	}, MessageEvent{
+		MessageID:              10,
+		Text:                   "Join our Go study group.",
+		At:                     now,
+		Now:                    now,
+		ForwardedFromChat:      true,
+		ForwardedFromChatTitle: "Golang Study",
+	})
+
+	if decision.Moderate {
+		t.Fatalf("expected forwarded non-finance group post to be allowed, got %#v", decision)
+	}
+}
+
 func TestEvaluateMessageModeratesUnknownNoHistoryHighConfidenceCyrillicRecruitment(t *testing.T) {
 	now := time.Unix(1000, 0)
 	decision := EvaluateMessage(testConfig(), HistoryView{
@@ -155,6 +276,22 @@ func TestEvaluateMessageModeratesUnknownNoHistoryHighConfidenceCyrillicRecruitme
 	}
 }
 
+func TestEvaluateMessageModeratesUnknownNoHistoryHighConfidenceCJKSpam(t *testing.T) {
+	now := time.Unix(1000, 0)
+	decision := EvaluateMessage(testConfig(), HistoryView{
+		MessageCount: 1,
+	}, MessageEvent{
+		MessageID: 10,
+		Text:      "送彩金 加入群",
+		At:        now,
+		Now:       now,
+	})
+
+	if !decision.Moderate || decision.Reason != "cjk-heavy" {
+		t.Fatalf("expected high-confidence unknown CJK spam moderation, got %#v", decision)
+	}
+}
+
 func TestEvaluateMessageAllowsUnknownNoHistoryPlainCyrillic(t *testing.T) {
 	now := time.Unix(1000, 0)
 	decision := EvaluateMessage(testConfig(), HistoryView{
@@ -168,6 +305,22 @@ func TestEvaluateMessageAllowsUnknownNoHistoryPlainCyrillic(t *testing.T) {
 
 	if decision.Moderate {
 		t.Fatalf("expected plain unknown cyrillic text to be allowed, got %#v", decision)
+	}
+}
+
+func TestEvaluateMessageAllowsUnknownNoHistoryShortCJKGreeting(t *testing.T) {
+	now := time.Unix(1000, 0)
+	decision := EvaluateMessage(testConfig(), HistoryView{
+		MessageCount: 1,
+	}, MessageEvent{
+		MessageID: 10,
+		Text:      "你好",
+		At:        now,
+		Now:       now,
+	})
+
+	if decision.Moderate {
+		t.Fatalf("expected short unknown CJK greeting to be allowed, got %#v", decision)
 	}
 }
 

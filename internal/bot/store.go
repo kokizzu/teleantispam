@@ -200,6 +200,29 @@ func (store *FileStore) MarkModerated(chatID int64, userID int64, messageID int,
 	return store.saveLocked()
 }
 
+func (store *FileStore) MarkManualModerated(chatID int64, userID int64, messageIDs []int, at time.Time, reason string, recentLimit int) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	history := store.historyLocked(chatID, userID)
+	if history.FirstSeenAt.IsZero() {
+		history.FirstSeenAt = at
+	}
+	for _, messageID := range messageIDs {
+		if messageID <= 0 {
+			continue
+		}
+		if !recentMessageContains(history.RecentMessageIDs, messageID) {
+			history.MessageCount++
+		}
+		history.RecentMessageIDs = appendRecentMessage(history.RecentMessageIDs, messageID, recentLimit)
+	}
+	history.LastMessageAt = at
+	history.LastModeratedAt = at
+	history.LastModeration = reason
+	return store.saveLocked()
+}
+
 func (store *FileStore) AppendModerationAction(action ModerationAction, limit int) error {
 	store.mu.Lock()
 	defer store.mu.Unlock()
@@ -370,6 +393,15 @@ func appendRecentMessage(ids []int, messageID int, limit int) []int {
 		ids = ids[len(ids)-limit:]
 	}
 	return ids
+}
+
+func recentMessageContains(ids []int, messageID int) bool {
+	for _, id := range ids {
+		if id == messageID {
+			return true
+		}
+	}
+	return false
 }
 
 func (store *FileStore) saveLocked() error {

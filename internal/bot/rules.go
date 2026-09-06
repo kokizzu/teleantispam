@@ -12,6 +12,11 @@ var cryptoSpamPattern = regexp.MustCompile(`(?i)\b(airdrop|bitcoin|btc|crypto|de
 var unknownNoHistoryContactPattern = regexp.MustCompile(`(?i)(\bt\.me/[a-z0-9_]+|\btelegram\.me/[a-z0-9_]+|@[a-z0-9_]{4,})`)
 var unknownNoHistoryCryptoPitchPattern = regexp.MustCompile(`(?i)\b(airdrop|earned?|earning|income|investment|mentor(ship)?|profit|pump|signal|trading|usdt|wallet)\b`)
 var unknownNoHistoryCyrillicPitchPattern = regexp.MustCompile(`(?i)(график|доход|занятост|заработ|команд|набор|онлайн|подработ|пишите|работ|ставьте|удален)`)
+var unknownNoHistoryCJKPitchPattern = regexp.MustCompile(`(送彩金|加入群|进群|联系.{0,4}(客服|我)|客服|兼职|赚钱|收益|投资|理财|钱包|空投|交易|博彩|彩票|下注|代理|私信|扫码|领取|福利|优惠|返利|会员|推广|网赌|投注)`)
+var forwardedFinanceTermPattern = regexp.MustCompile(`(?i)\b(airdrop|bitcoin|btc|crypto|defi|ethereum|eth|finance|financial|forex|fx|income|invest(?:ing|ment)?|market|profit|pump|signal|stock|trading|usdt|wallet|web3)\b`)
+var forwardedFinancePitchPattern = regexp.MustCompile(`(?i)(\bt\.me/[a-z0-9_]+|\btelegram\.me/[a-z0-9_]+|@[a-z0-9_]{4,}|\b(channel|earned?|earning|group|income|invest(?:ing|ment)?|join|mentor(ship)?|profit|pump|signal|subscribe|trading|usdt|vip|wallet)\b)`)
+var financeCommercialTermPattern = regexp.MustCompile(`(?i)\b(finance|financial|forex|income|invest(?:ing|ment)?|market|profit|stock|trading|wealth)\b`)
+var privateTelegramInvitePattern = regexp.MustCompile(`(?i)(?:^|[\s(])(?:https?://)?(?:t\.me|telegram\.me)/(?:\+[a-z0-9_-]+|joinchat/[a-z0-9_-]+)\b`)
 
 type MessageEvent struct {
 	ChatID    int64
@@ -20,6 +25,10 @@ type MessageEvent struct {
 	Text      string
 	At        time.Time
 	Now       time.Time
+
+	ForwardedFromChat         bool
+	ForwardedFromChatTitle    string
+	ForwardedFromChatUsername string
 }
 
 type HistoryView struct {
@@ -44,7 +53,7 @@ func EvaluateMessage(cfg Config, history HistoryView, event MessageEvent) Modera
 		return ModerationDecision{}
 	}
 
-	reason := suspiciousReason(event.Text)
+	reason := suspiciousReason(event)
 	if reason == "" {
 		return ModerationDecision{}
 	}
@@ -79,42 +88,82 @@ func eligibleLowHistory(cfg Config, history HistoryView, event MessageEvent, rea
 	if cfg.AllowUnknownNoHistory {
 		return true
 	}
-	return highConfidenceUnknownNoHistorySpam(reason, event.Text)
+	return highConfidenceUnknownNoHistorySpam(reason, event)
 }
 
-func highConfidenceUnknownNoHistorySpam(reason string, text string) bool {
-	normalized := strings.TrimSpace(strings.ToLower(text))
-	if normalized == "" || !unknownNoHistoryContactPattern.MatchString(normalized) {
-		return false
+func highConfidenceUnknownNoHistorySpam(reason string, event MessageEvent) bool {
+	normalized := strings.TrimSpace(strings.ToLower(event.Text))
+	if normalized == "" {
+		return reason == "forwarded-finance-group" && forwardedFinanceGroupSpam(event)
 	}
 	switch reason {
+	case "finance-private-invite":
+		return financePrivateInviteSpam(event.Text)
+	case "forwarded-finance-group":
+		return forwardedFinanceGroupSpam(event)
+	case "cjk-heavy":
+		return unknownNoHistoryCJKPitchPattern.MatchString(normalized)
 	case "crypto-keyword":
+		if !unknownNoHistoryContactPattern.MatchString(normalized) {
+			return false
+		}
 		return unknownNoHistoryCryptoPitchPattern.MatchString(normalized)
 	case "cyrillic-heavy":
+		if !unknownNoHistoryContactPattern.MatchString(normalized) {
+			return false
+		}
 		return unknownNoHistoryCyrillicPitchPattern.MatchString(normalized)
 	default:
 		return false
 	}
 }
 
-func suspiciousReason(text string) string {
-	normalized := strings.TrimSpace(strings.ToLower(text))
+func suspiciousReason(event MessageEvent) string {
+	if forwardedFinanceGroupSpam(event) {
+		return "forwarded-finance-group"
+	}
+
+	normalized := strings.TrimSpace(strings.ToLower(event.Text))
 	if normalized == "" {
 		return ""
 	}
 	if normalized == "0" {
 		return "zero-message"
 	}
+	if financePrivateInviteSpam(normalized) {
+		return "finance-private-invite"
+	}
 	if cryptoSpamPattern.MatchString(normalized) {
 		return "crypto-keyword"
 	}
-	if cjkHeavy(text) {
+	if cjkHeavy(event.Text) {
 		return "cjk-heavy"
 	}
-	if cyrillicHeavy(text) {
+	if cyrillicHeavy(event.Text) {
 		return "cyrillic-heavy"
 	}
 	return ""
+}
+
+func financePrivateInviteSpam(text string) bool {
+	return financeCommercialTermPattern.MatchString(text) &&
+		privateTelegramInvitePattern.MatchString(text)
+}
+
+func forwardedFinanceGroupSpam(event MessageEvent) bool {
+	if !event.ForwardedFromChat {
+		return false
+	}
+	combined := strings.TrimSpace(strings.Join([]string{
+		event.Text,
+		event.ForwardedFromChatTitle,
+		event.ForwardedFromChatUsername,
+	}, " "))
+	if combined == "" {
+		return false
+	}
+	return forwardedFinanceTermPattern.MatchString(combined) &&
+		forwardedFinancePitchPattern.MatchString(combined)
 }
 
 func cjkHeavy(text string) bool {

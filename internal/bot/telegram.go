@@ -3,8 +3,12 @@ package bot
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +24,40 @@ type TelegramClient interface {
 
 type botAPIClient struct {
 	bot *tgbotapi.BotAPI
+}
+
+type MessageForwardOrigin struct {
+	Type            string         `json:"type"`
+	Date            int            `json:"date"`
+	SenderUser      *tgbotapi.User `json:"sender_user,omitempty"`
+	SenderUserName  string         `json:"sender_user_name,omitempty"`
+	SenderChat      *tgbotapi.Chat `json:"sender_chat,omitempty"`
+	AuthorSignature string         `json:"author_signature,omitempty"`
+	Chat            *tgbotapi.Chat `json:"chat,omitempty"`
+	MessageID       int            `json:"message_id,omitempty"`
+}
+
+type MessageForwardMetadata struct {
+	ForwardedFromChat         bool
+	ForwardedFromChatTitle    string
+	ForwardedFromChatUsername string
+}
+
+type rawTelegramMessage struct {
+	tgbotapi.Message
+	ForwardOrigin *MessageForwardOrigin `json:"forward_origin,omitempty"`
+}
+
+type rawTelegramUpdate struct {
+	UpdateID int                 `json:"update_id"`
+	Message  *rawTelegramMessage `json:"message,omitempty"`
+}
+
+type rawGetUpdatesResponse struct {
+	OK          bool                `json:"ok"`
+	Result      []rawTelegramUpdate `json:"result"`
+	ErrorCode   int                 `json:"error_code,omitempty"`
+	Description string              `json:"description,omitempty"`
 }
 
 func NewTelegramClient(token string) (TelegramClient, error) {
@@ -38,38 +76,37 @@ func Run(ctx context.Context, cfg Config, store *FileStore) error {
 	log.Printf("authorized TeleAntiSpam2Bot as @%s", api.Self.UserName)
 
 	client := botAPIClient{bot: api}
-	nextOffset, err := drainPendingUpdates(ctx, api, cfg, store, client)
+	nextOffset, err := drainPendingUpdates(ctx, cfg, store, client)
 	if err != nil {
 		return err
 	}
-
-	updateConfig := tgbotapi.NewUpdate(nextOffset)
-	updateConfig.Timeout = cfg.PollTimeout
-	updateConfig.AllowedUpdates = []string{"message"}
-
-	updates := api.GetUpdatesChan(updateConfig)
 	for {
 		select {
 		case <-ctx.Done():
-			api.StopReceivingUpdates()
 			return ctx.Err()
-		case update, ok := <-updates:
-			if !ok {
-				return nil
+		default:
+		}
+
+		updates, err := fetchRawUpdates(ctx, cfg.Token, nextOffset, 100, cfg.PollTimeout)
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
 			}
-			if err := HandleUpdate(cfg, store, client, update, time.Now()); err != nil {
-				log.Printf("handle update failed: %v", err)
+			log.Printf("%v", err)
+			log.Printf("Failed to get updates, retrying in 3 seconds...")
+			if !sleepWithContext(ctx, 3*time.Second) {
+				return ctx.Err()
 			}
+			continue
+		}
+		nextOffset, err = HandleRawUpdates(cfg, store, client, updates, time.Now())
+		if err != nil {
+			log.Printf("handle update failed: %v", err)
 		}
 	}
 }
 
-func drainPendingUpdates(ctx context.Context, api *tgbotapi.BotAPI, cfg Config, store *FileStore, client TelegramClient) (int, error) {
-	updateConfig := tgbotapi.NewUpdate(0)
-	updateConfig.Limit = 100
-	updateConfig.Timeout = 0
-	updateConfig.AllowedUpdates = []string{"message"}
-
+func drainPendingUpdates(ctx context.Context, cfg Config, store *FileStore, client TelegramClient) (int, error) {
 	nextOffset := 0
 	for {
 		select {
@@ -78,22 +115,109 @@ func drainPendingUpdates(ctx context.Context, api *tgbotapi.BotAPI, cfg Config, 
 		default:
 		}
 
-		updates, err := api.GetUpdates(updateConfig)
+		updates, err := fetchRawUpdates(ctx, cfg.Token, nextOffset, 100, 0)
 		if err != nil {
 			return nextOffset, fmt.Errorf("startup pending update scan: %w", err)
 		}
 		if len(updates) == 0 {
 			return nextOffset, nil
 		}
-		nextOffset, err = HandleUpdates(cfg, store, client, updates, time.Now())
+		nextOffset, err = HandleRawUpdates(cfg, store, client, updates, time.Now())
 		if err != nil {
 			return nextOffset, err
 		}
-		updateConfig.Offset = nextOffset
-		if len(updates) < updateConfig.Limit {
+		if len(updates) < 100 {
 			return nextOffset, nil
 		}
 	}
+}
+
+func fetchRawUpdates(ctx context.Context, token string, offset int, limit int, timeout int) ([]rawTelegramUpdate, error) {
+	values := url.Values{}
+	if offset > 0 {
+		values.Set("offset", strconv.Itoa(offset))
+	}
+	if limit > 0 {
+		values.Set("limit", strconv.Itoa(limit))
+	}
+	if timeout > 0 {
+		values.Set("timeout", strconv.Itoa(timeout))
+	}
+	allowedUpdates, err := json.Marshal([]string{"message"})
+	if err != nil {
+		return nil, err
+	}
+	values.Set("allowed_updates", string(allowedUpdates))
+
+	clientTimeout := time.Duration(timeout+10) * time.Second
+	if clientTimeout < 10*time.Second {
+		clientTimeout = 10 * time.Second
+	}
+	httpClient := http.Client{Timeout: clientTimeout}
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		"https://api.telegram.org/bot"+token+"/getUpdates",
+		strings.NewReader(values.Encode()),
+	)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, telegramRequestError(err)
+	}
+	defer resp.Body.Close()
+
+	var decoded rawGetUpdatesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
+		return nil, err
+	}
+	if !decoded.OK {
+		return nil, fmt.Errorf("getUpdates failed: code=%d description=%s", decoded.ErrorCode, decoded.Description)
+	}
+	return decoded.Result, nil
+}
+
+func telegramRequestError(err error) error {
+	var requestError *url.Error
+	if errors.As(err, &requestError) {
+		return fmt.Errorf("Telegram getUpdates request failed: %w", requestError.Err)
+	}
+	return fmt.Errorf("Telegram getUpdates request failed")
+}
+
+func sleepWithContext(ctx context.Context, duration time.Duration) bool {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+func HandleRawUpdates(cfg Config, store *FileStore, client TelegramClient, updates []rawTelegramUpdate, now time.Time) (int, error) {
+	nextOffset := 0
+	for _, update := range updates {
+		if update.UpdateID >= nextOffset {
+			nextOffset = update.UpdateID + 1
+		}
+		if err := HandleRawUpdate(cfg, store, client, update, now); err != nil {
+			return nextOffset, err
+		}
+	}
+	return nextOffset, nil
+}
+
+func HandleRawUpdate(cfg Config, store *FileStore, client TelegramClient, update rawTelegramUpdate, now time.Time) error {
+	if update.Message == nil {
+		return nil
+	}
+	return HandleTelegramMessage(cfg, store, client, &update.Message.Message, forwardMetadataFromRawMessage(update.Message), now)
 }
 
 func HandleUpdates(cfg Config, store *FileStore, client TelegramClient, updates []tgbotapi.Update, now time.Time) (int, error) {
@@ -117,6 +241,10 @@ func HandleUpdate(cfg Config, store *FileStore, client TelegramClient, update tg
 }
 
 func HandleMessage(cfg Config, store *FileStore, client TelegramClient, message *tgbotapi.Message, now time.Time) error {
+	return HandleTelegramMessage(cfg, store, client, message, forwardMetadataFromMessage(message), now)
+}
+
+func HandleTelegramMessage(cfg Config, store *FileStore, client TelegramClient, message *tgbotapi.Message, forward MessageForwardMetadata, now time.Time) error {
 	if message.Chat == nil {
 		return nil
 	}
@@ -153,6 +281,10 @@ func HandleMessage(cfg Config, store *FileStore, client TelegramClient, message 
 		Text:      text,
 		At:        messageTime,
 		Now:       now,
+
+		ForwardedFromChat:         forward.ForwardedFromChat,
+		ForwardedFromChatTitle:    forward.ForwardedFromChatTitle,
+		ForwardedFromChatUsername: forward.ForwardedFromChatUsername,
 	})
 
 	if !decision.Moderate {
@@ -265,6 +397,38 @@ func HandleMessage(cfg Config, store *FileStore, client TelegramClient, message 
 	return store.AppendModerationAction(action, cfg.ActionLogLimit)
 }
 
+func forwardMetadataFromRawMessage(message *rawTelegramMessage) MessageForwardMetadata {
+	metadata := forwardMetadataFromMessage(&message.Message)
+	if message.ForwardOrigin == nil {
+		return metadata
+	}
+	switch message.ForwardOrigin.Type {
+	case "chat":
+		metadata = forwardMetadataFromChat(message.ForwardOrigin.SenderChat)
+	case "channel":
+		metadata = forwardMetadataFromChat(message.ForwardOrigin.Chat)
+	}
+	return metadata
+}
+
+func forwardMetadataFromMessage(message *tgbotapi.Message) MessageForwardMetadata {
+	if message == nil || message.ForwardFromChat == nil {
+		return MessageForwardMetadata{}
+	}
+	return forwardMetadataFromChat(message.ForwardFromChat)
+}
+
+func forwardMetadataFromChat(chat *tgbotapi.Chat) MessageForwardMetadata {
+	if chat == nil {
+		return MessageForwardMetadata{}
+	}
+	return MessageForwardMetadata{
+		ForwardedFromChat:         true,
+		ForwardedFromChatTitle:    chat.Title,
+		ForwardedFromChatUsername: chat.UserName,
+	}
+}
+
 func (client botAPIClient) DeleteMessage(chatID int64, messageID int) error {
 	_, err := client.bot.Request(tgbotapi.NewDeleteMessage(chatID, messageID))
 	return err
@@ -321,6 +485,24 @@ func AccountEvidenceFromUser(user tgbotapi.User) AccountEvidence {
 }
 
 func ApplyChatMemberEvidence(evidence *AccountEvidence, member tgbotapi.ChatMember) {
+	if member.User != nil {
+		if evidence.ID == 0 {
+			evidence.ID = member.User.ID
+		}
+		if evidence.FirstName == "" {
+			evidence.FirstName = member.User.FirstName
+		}
+		if evidence.LastName == "" {
+			evidence.LastName = member.User.LastName
+		}
+		if evidence.Username == "" {
+			evidence.Username = member.User.UserName
+		}
+		if evidence.LanguageCode == "" {
+			evidence.LanguageCode = member.User.LanguageCode
+		}
+		evidence.IsBot = member.User.IsBot
+	}
 	evidence.ChatMemberStatus = member.Status
 	evidence.ChatMemberCustomTitle = member.CustomTitle
 	evidence.ChatMemberUntilDate = member.UntilDate

@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -28,6 +29,12 @@ func main() {
 	checkAdminNotifyChat := flag.String("check-admin-notify-chat", envDefault("TELEANTISPAM_ADMIN_CHECK_NOTIFY_CHAT", ""), "chat username or ID to notify once when admin rights are ready")
 	retryFailedModeration := flag.Bool("retry-failed-moderation", false, "retry recent failed moderation actions and exit")
 	retryFailedMaxAge := flag.Duration("retry-failed-max-age", envDurationDefault("TELEANTISPAM_RETRY_FAILED_ACTION_MAX_AGE", bot.DefaultRetryFailedActionMaxAge), "maximum age of failed moderation actions to retry")
+	manualModerate := flag.Bool("manual-moderate", false, "delete specific message IDs, ban the user, send the standard notice, and log the action")
+	manualChatID := flag.Int64("manual-chat-id", 0, "chat ID for manual moderation")
+	manualUserID := flag.Int64("manual-user-id", 0, "user ID for manual moderation")
+	manualMessageIDs := flag.String("manual-message-ids", "", "comma-separated message IDs for manual moderation")
+	manualReason := flag.String("manual-reason", "manual", "reason for manual moderation")
+	manualMessageSample := flag.String("manual-message-sample", "", "optional sample text for the manual action log")
 	flag.Parse()
 	if *showVersion {
 		fmt.Printf("TeleAntiSpam2Bot version=%s commit=%s\n", version, commit)
@@ -54,6 +61,29 @@ func main() {
 	store, err := bot.OpenFileStore(cfg.StatePath)
 	if err != nil {
 		log.Fatalf("open state store: %v", err)
+	}
+	if *manualModerate {
+		api, err := bot.NewTelegramClient(cfg.Token)
+		if err != nil {
+			log.Fatalf("new Telegram client: %v", err)
+		}
+		messageIDs, err := parseManualMessageIDs(*manualMessageIDs)
+		if err != nil {
+			log.Fatalf("parse manual message IDs: %v", err)
+		}
+		summary, err := bot.ManualModerate(cfg, store, api, bot.ManualModerationRequest{
+			ChatID:            *manualChatID,
+			UserID:            *manualUserID,
+			MessageIDs:        messageIDs,
+			Reason:            *manualReason,
+			MessageTextSample: *manualMessageSample,
+			Now:               time.Now(),
+		})
+		log.Print(summary.Summary())
+		if err != nil {
+			log.Fatalf("manual moderation: %v", err)
+		}
+		return
 	}
 	if *retryFailedModeration {
 		api, err := bot.NewTelegramClient(cfg.Token)
@@ -144,4 +174,26 @@ func envDurationDefault(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return parsed
+}
+
+func parseManualMessageIDs(raw string) ([]int, error) {
+	var ids []int
+	for _, item := range strings.Split(raw, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		id, err := strconv.Atoi(item)
+		if err != nil {
+			return nil, fmt.Errorf("invalid message ID %q: %w", item, err)
+		}
+		if id <= 0 {
+			return nil, fmt.Errorf("invalid message ID %q: must be positive", item)
+		}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("at least one message ID is required")
+	}
+	return ids, nil
 }
